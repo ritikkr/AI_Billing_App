@@ -14,6 +14,7 @@ import { invoicesRouter } from './routes/invoices.routes.js';
 import { paymentsRouter } from './routes/payments.routes.js';
 import { creditNotesRouter } from './routes/creditNotes.routes.js';
 import { reportsRouter } from './routes/reports.routes.js';
+import { pdfImportRouter } from './routes/pdfImport.routes.js';
 import { INDIAN_STATES, GST_RATE_SLABS, UNITS, PAYMENT_MODES } from './services/gst.constants.js';
 
 runMigrations();
@@ -41,6 +42,7 @@ app.use('/api/companies/:companyId/invoices', requireAuth, requireCompany, invoi
 app.use('/api/companies/:companyId/payments', requireAuth, requireCompany, paymentsRouter);
 app.use('/api/companies/:companyId/credit-notes', requireAuth, requireCompany, creditNotesRouter);
 app.use('/api/companies/:companyId/reports', requireAuth, requireCompany, reportsRouter);
+app.use('/api/companies/:companyId/pdf-import', requireAuth, requireCompany, pdfImportRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
