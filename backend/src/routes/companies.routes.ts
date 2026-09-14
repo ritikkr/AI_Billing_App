@@ -297,6 +297,10 @@ companiesRouter.patch(
   requireRole('admin'),
   asyncHandler(async (req, res) => {
     const { role } = updateRoleSchema.parse(req.body);
+    if (req.params.userId === req.user!.id) {
+      throw new ApiError(400, 'An admin cannot demote or remove itself');
+    }
+
     const membership = db
       .prepare(`SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ?`)
       .get(req.params.userId, req.companyId) as any;
@@ -323,6 +327,10 @@ companiesRouter.delete(
   requireCompany,
   requireRole('admin'),
   asyncHandler(async (req, res) => {
+    if (req.params.userId === req.user!.id) {
+      throw new ApiError(400, 'An admin cannot remove itself');
+    }
+
     const membership = db
       .prepare(`SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ?`)
       .get(req.params.userId, req.companyId) as any;

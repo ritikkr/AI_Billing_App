@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
+import { Logo } from '../ui/Logo';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: DashboardIcon, end: true },
@@ -13,31 +14,74 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-      <div className="flex h-16 items-center gap-2 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">₹</div>
-        <span className="text-base font-semibold text-slate-900">BillGST</span>
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200/70 bg-white/70 backdrop-blur-xl md:flex">
+      <div className="flex h-16 items-center px-5">
+        <Logo size="sm" />
       </div>
-      <nav className="flex-1 space-y-0.5 px-3 py-2">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              clsx(
-                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              )
-            }
-          >
-            <item.icon className="h-4.5 w-4.5" />
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      <NavContent />
       <div className="px-5 py-4 text-xs text-slate-400">India GST-compliant billing</div>
     </aside>
+  );
+}
+
+export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+      <div className="absolute inset-0 overscroll-contain bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-modal">
+        <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5">
+          <Logo size="sm" />
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close navigation menu"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2" onClick={onClose}>
+          <NavContent />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavContent() {
+  return (
+    <nav className="flex-1 space-y-1 px-3 py-2">
+      {NAV_ITEMS.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          className={({ isActive }) =>
+            clsx(
+              'group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition duration-150',
+              isActive
+                ? 'bg-white text-indigo-700 shadow-card ring-1 ring-slate-200/70'
+                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <span
+                className={clsx(
+                  'absolute left-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600 opacity-0 transition-opacity',
+                  isActive && 'opacity-100'
+                )}
+              />
+              <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+              {item.label}
+            </>
+          )}
+        </NavLink>
+      ))}
+    </nav>
   );
 }
 

@@ -62,7 +62,7 @@ export default function ItemsList() {
 
       <Card>
         <div className="border-b border-slate-100 p-4">
-          <Input placeholder="Search by name or HSN/SAC…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+          <Input type="search" name="item-search" autoComplete="off" enterKeyHint="search" placeholder="Search by name or HSN/SAC…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
         </div>
         {isLoading ? (
           <PageLoader />
@@ -72,19 +72,19 @@ export default function ItemsList() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Name</th>
-                  <th className="px-5 py-2.5 font-medium">Type</th>
-                  <th className="px-5 py-2.5 font-medium">HSN/SAC</th>
-                  <th className="px-5 py-2.5 font-medium">Price</th>
-                  <th className="px-5 py-2.5 font-medium">GST</th>
-                  <th className="px-5 py-2.5 font-medium">Stock</th>
-                  <th className="px-5 py-2.5 font-medium"></th>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3 font-medium">Name</th>
+                  <th className="px-5 py-3 font-medium">Type</th>
+                  <th className="px-5 py-3 font-medium">HSN/SAC</th>
+                  <th className="px-5 py-3 font-medium">Price</th>
+                  <th className="px-5 py-3 font-medium">GST</th>
+                  <th className="px-5 py-3 font-medium">Stock</th>
+                  <th className="px-5 py-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                  <tr key={item.id} className="border-b border-slate-100/70 transition-colors last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-900">{item.name}</div>
                       {item.description && <div className="max-w-xs truncate text-xs text-slate-400">{item.description}</div>}
@@ -101,7 +101,7 @@ export default function ItemsList() {
                     <td className="px-5 py-3 text-slate-600">{item.trackInventory ? item.stockQty : '—'}</td>
                     <td className="px-5 py-3 text-right">
                       {canEdit && (
-                        <button onClick={() => openEdit(item)} className="text-sm font-medium text-indigo-600 hover:underline">
+                        <button onClick={() => openEdit(item)} className="text-sm font-medium text-indigo-600 transition-colors hover:text-indigo-700">
                           Edit
                         </button>
                       )}

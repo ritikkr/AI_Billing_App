@@ -137,13 +137,13 @@ export default function CustomersList() {
       </div>
 
       <Card>
-        <div className="border-b border-slate-100 p-4">
+        <div className="border-b border-slate-100 bg-slate-50/40 p-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Input placeholder="Search by name, GSTIN or email…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+            <Input type="search" name="customer-search" autoComplete="off" enterKeyHint="search" placeholder="Search by name, GSTIN or email…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
             <select
               value={group}
               onChange={(e) => setGroup(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition duration-150 hover:border-slate-300 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15"
             >
               <option value="">All groups</option>
               {(groups || []).map((g) => (
@@ -162,8 +162,8 @@ export default function CustomersList() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="w-10 px-3 py-2.5 font-medium">
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="w-10 px-3 py-3 font-medium">
                     <input
                       ref={(el) => {
                         if (el) el.indeterminate = selected.size > 0 && selected.size < paged.length;
@@ -174,17 +174,17 @@ export default function CustomersList() {
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                     />
                   </th>
-                  <th className="px-5 py-2.5 font-medium">Name</th>
-                  <th className="px-5 py-2.5 font-medium">Group</th>
-                  <th className="px-5 py-2.5 font-medium">GSTIN</th>
-                  <th className="px-5 py-2.5 font-medium">Contact</th>
-                  <th className="px-5 py-2.5 font-medium">Status</th>
-                  {isAdmin && <th className="w-10 px-5 py-2.5 font-medium"></th>}
+                  <th className="px-5 py-3 font-medium">Name</th>
+                  <th className="px-5 py-3 font-medium">Group</th>
+                  <th className="px-5 py-3 font-medium">GSTIN</th>
+                  <th className="px-5 py-3 font-medium">Contact</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  {isAdmin && <th className="w-10 px-5 py-3 font-medium"></th>}
                 </tr>
               </thead>
               <tbody>
                 {paged.map((c) => (
-                  <tr key={c.id} className={`border-b border-slate-50 last:border-0 ${selected.has(c.id) ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                  <tr key={c.id} className={`border-b border-slate-100/70 transition-colors last:border-0 ${selected.has(c.id) ? 'bg-indigo-50/70' : 'hover:bg-slate-50/60'}`}>
                     <td className="px-3 py-3">
                       <input
                         type="checkbox"
@@ -194,7 +194,7 @@ export default function CustomersList() {
                       />
                     </td>
                     <td className="px-5 py-3">
-                      <Link to={`/customers/${c.id}`} className="font-medium text-indigo-600 hover:underline">
+                      <Link to={`/customers/${c.id}`} className="font-medium text-indigo-600 transition-colors hover:text-indigo-700">
                         {c.name}
                       </Link>
                       {c.openingBalance !== 0 && (

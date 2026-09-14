@@ -230,3 +230,11 @@ export interface CompanyUser {
   email: string;
   role: Role;
 }
+
+export type DocumentDesign = 'classic' | 'modern' | 'minimal' | 'vyapar';
+
+export interface Preferences {
+  printDesign: DocumentDesign;
+  downloadDesign: DocumentDesign;
+  updatedAt?: string;
+}

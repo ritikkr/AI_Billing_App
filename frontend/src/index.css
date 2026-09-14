@@ -1,32 +1,162 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'SF Pro Display', 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+
+  /* Refined neutral palette — a touch warmer than default slate for a softer, modern feel */
+  --color-slate-50: #f9fafb;
+  --color-slate-100: #f3f4f6;
+  --color-slate-200: #e5e7eb;
+  --color-slate-300: #d1d5db;
+  --color-slate-400: #9ca3af;
+  --color-slate-500: #6b7280;
+  --color-slate-600: #4b5563;
+  --color-slate-700: #374151;
+  --color-slate-800: #1f2937;
+  --color-slate-900: #111827;
+  --color-slate-950: #030712;
+
+  /* Layered, soft shadows */
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 4px 12px -2px rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 2px 4px 0 rgb(15 23 42 / 0.05), 0 12px 28px -10px rgb(79 70 229 / 0.18);
+  --shadow-dropdown: 0 4px 6px -1px rgb(15 23 42 / 0.05), 0 12px 24px -6px rgb(15 23 42 / 0.1);
+  --shadow-modal: 0 10px 20px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
+  --shadow-glow: 0 0 0 1px rgb(79 70 229 / 0.14), 0 8px 20px -6px rgb(79 70 229 / 0.35);
+
+  /* Micro-interactions */
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-slide-in: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
-html, body, #root {
-  height: 100%;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  background-color: #f8fafc;
-}
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    color: var(--color-slate-900);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    /* Respect notches & rounded corners on mobile web apps */
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 
-* {
-  box-sizing: border-box;
+  /* Ambient canvas — soft gradient meshes for depth without noise */
+  body {
+    background-color: #f6f7fb;
+    background-image:
+      radial-gradient(55rem 38rem at 12% -8%, rgb(99 102 241 / 0.09), transparent 60%),
+      radial-gradient(45rem 32rem at 108% 8%, rgb(16 185 129 / 0.06), transparent 55%),
+      radial-gradient(50rem 42rem at 50% 120%, rgb(251 146 60 / 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background-color: rgb(79 70 229 / 0.16);
+    color: var(--color-slate-900);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  /* Keep financial figures aligned in tables & lists */
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline-color: var(--color-indigo-500);
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: var(--color-slate-300);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-400);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

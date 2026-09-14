@@ -187,14 +187,14 @@ export default function CreditNoteForm() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2 font-medium">Item</th>
-                <th className="px-3 py-2 font-medium">HSN/SAC</th>
-                <th className="w-20 px-3 py-2 font-medium">Qty</th>
-                <th className="w-24 px-3 py-2 font-medium">Rate</th>
-                <th className="w-20 px-3 py-2 font-medium">GST %</th>
-                <th className="px-3 py-2 text-right font-medium">Amount</th>
-                <th className="w-8 px-3 py-2"></th>
+              <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-2.5 font-medium">Item</th>
+                <th className="px-3 py-2.5 font-medium">HSN/SAC</th>
+                <th className="w-20 px-3 py-2.5 font-medium">Qty</th>
+                <th className="w-24 px-3 py-2.5 font-medium">Rate</th>
+                <th className="w-20 px-3 py-2.5 font-medium">GST %</th>
+                <th className="px-3 py-2.5 text-right font-medium">Amount</th>
+                <th className="w-8 px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -231,10 +231,10 @@ export default function CreditNoteForm() {
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(taxedLines[idx]?.lineTotal || 0)}</td>
                   <td className="px-3 py-2">
-                    <button type="button" onClick={() => removeLine(line.key)} className="text-slate-400 hover:text-red-600">
-                      ✕
-                    </button>
-                  </td>
+            <button type="button" onClick={() => removeLine(line.key)} className="text-slate-400 hover:text-red-600" aria-label={`Remove line ${idx + 1}`}>
+              <span aria-hidden="true">✕</span>
+            </button>
+          </td>
                 </tr>
               ))}
             </tbody>

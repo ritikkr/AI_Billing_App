@@ -14,18 +14,20 @@ import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/Spinner';
+import { PrintDownloadTab } from './PrintDownloadTab';
 import type { Role } from '../../types';
 
 const TABS = [
   { key: 'profile', label: 'Company Profile' },
   { key: 'users', label: 'Users & Roles' },
+  { key: 'preferences', label: 'Print & Download' },
 ] as const;
 
 export default function CompanySettings() {
   const { tab: tabParam } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useCompany();
-  const tab = tabParam === 'users' ? 'users' : 'profile';
+  const tab = tabParam === 'users' ? 'users' : tabParam === 'preferences' ? 'preferences' : 'profile';
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -34,19 +36,19 @@ export default function CompanySettings() {
         <p className="text-sm text-slate-500">Manage your company profile and team access</p>
       </div>
 
-      <div className="flex gap-1 rounded-lg bg-slate-100 p-1" style={{ width: 'fit-content' }}>
+      <div className="flex gap-1 rounded-xl bg-slate-100/90 p-1 shadow-xs ring-1 ring-slate-200/60" style={{ width: 'fit-content' }}>
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => navigate(`/settings/${t.key}`)}
-            className={clsx('rounded-md px-3 py-1.5 text-sm font-medium transition-colors', tab === t.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
+            className={clsx('rounded-lg px-3 py-1.5 text-sm font-medium transition duration-150', tab === t.key ? 'bg-white text-indigo-700 shadow-card' : 'text-slate-600 hover:text-slate-900')}
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'profile' ? <ProfileTab readOnly={!isAdmin} /> : <UsersTab />}
+      {tab === 'profile' ? <ProfileTab readOnly={!isAdmin} /> : tab === 'preferences' ? <PrintDownloadTab /> : <UsersTab />}
     </div>
   );
 }
@@ -130,16 +132,16 @@ function UsersTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-2.5 font-medium">Name</th>
-                <th className="px-5 py-2.5 font-medium">Email</th>
-                <th className="px-5 py-2.5 font-medium">Role</th>
-                <th className="px-5 py-2.5 font-medium"></th>
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3 font-medium">Name</th>
+                <th className="px-5 py-3 font-medium">Email</th>
+                <th className="px-5 py-3 font-medium">Role</th>
+                <th className="px-5 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
               {(users || []).map((u) => (
-                <tr key={u.id} className="border-b border-slate-50 last:border-0">
+                <tr key={u.id} className="border-b border-slate-100/70 last:border-0">
                   <td className="px-5 py-3 font-medium text-slate-900">
                     {u.name} {u.id === currentUser?.id && <Badge className="ml-1">You</Badge>}
                   </td>
@@ -149,6 +151,7 @@ function UsersTab() {
                       <Select
                         value={u.role}
                         onChange={(e) => roleMutation.mutate({ userId: u.id, role: e.target.value as Role })}
+                        disabled={u.id === currentUser?.id}
                         className="w-36"
                       >
                         <option value="admin">Admin</option>

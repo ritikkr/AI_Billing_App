@@ -62,7 +62,7 @@ export default function Profile() {
       <Card>
         <CardHeader title="Account" subtitle="Your personal login details" />
         <CardBody className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-white">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20">
             {user ? initials(user.name) : '?'}
           </div>
           <div className="min-w-0 flex-1">

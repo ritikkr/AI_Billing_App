@@ -17,6 +17,7 @@ import CreditNoteDetail from './pages/creditnotes/CreditNoteDetail';
 import Reports from './pages/reports/Reports';
 import CompanySettings from './pages/settings/CompanySettings';
 import Profile from './pages/Profile';
+import ServeDocument from './pages/serve/ServeDocument';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/companies/new" element={<CreateCompany />} />
+        <Route path="/serve/:doc/:id" element={<ServeDocument />} />
 
         <Route element={<RequireCompany />}>
           <Route element={<AppShell />}>

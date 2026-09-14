@@ -1,0 +1,19 @@
+{
+  "name": "BillGST — GST Billing",
+  "short_name": "BillGST",
+  "description": "India GST-compliant billing application for invoicing, customers, payments & GST reports.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#f6f7fb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "finance"]
+}

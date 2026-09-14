@@ -33,12 +33,12 @@ export function Pagination({ page, pageCount, total, pageSize, onChange }: Pagin
         Showing <span className="font-medium text-slate-700">{from}</span>–<span className="font-medium text-slate-700">{to}</span> of{' '}
         <span className="font-medium text-slate-700">{total}</span>
       </p>
-      <nav className="flex items-center gap-1">
+      <nav className="flex items-center gap-1" aria-label="Pagination">
         <button
           type="button"
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           ‹ Prev
         </button>
@@ -52,9 +52,10 @@ export function Pagination({ page, pageCount, total, pageSize, onChange }: Pagin
               key={p}
               type="button"
               onClick={() => onChange(p)}
+              aria-current={p === page ? 'page' : undefined}
               className={clsx(
-                'rounded-md px-2.5 py-1.5 text-sm',
-                p === page ? 'bg-indigo-600 font-medium text-white' : 'text-slate-600 hover:bg-slate-50'
+                'rounded-lg px-2.5 py-1.5 text-sm transition-colors',
+                p === page ? 'bg-indigo-600 font-medium text-white shadow-sm shadow-indigo-600/25' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
               {p}
@@ -65,7 +66,7 @@ export function Pagination({ page, pageCount, total, pageSize, onChange }: Pagin
           type="button"
           disabled={page >= pageCount}
           onClick={() => onChange(page + 1)}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next ›
         </button>

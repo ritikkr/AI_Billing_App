@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useParams, Link, Navigate, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useCompany } from '../../context/CompanyContext';
 import { useToast } from '../../context/ToastContext';
 import { getInvoice, cancelInvoice, deleteInvoice } from '../../api/invoices';
+import { getPreferences } from '../../api/preferences';
 import { apiErrorMessage } from '../../api/client';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -12,7 +12,7 @@ import { StatusBadge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/Spinner';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { amountInWords } from '../../utils/gst';
-import { InvoicePdf } from '../../pdf/InvoicePdf';
+import { DocumentPreviewModal } from '../../components/print/DocumentPreviewModal';
 import { RecordPaymentModal } from './RecordPaymentModal';
 
 export default function InvoiceDetail() {
@@ -22,11 +22,18 @@ export default function InvoiceDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice', companyId, id],
     queryFn: () => getInvoice(companyId!, id!),
     enabled: !!companyId && !!id,
+  });
+
+  const { data: preferences } = useQuery({
+    queryKey: ['preferences', companyId],
+    queryFn: () => getPreferences(companyId!),
+    enabled: !!companyId && !!invoice,
   });
 
   const cancelMutation = useMutation({
@@ -71,13 +78,17 @@ export default function InvoiceDetail() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PDFDownloadLink document={<InvoicePdf invoice={invoice} />} fileName={`${invoice.invoiceNumber.replace(/\//g, '-')}.pdf`}>
-            {({ loading }) => (
-              <Button variant="outline" loading={loading}>
-                Download PDF
-              </Button>
-            )}
-          </PDFDownloadLink>
+          <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+              />
+            </svg>
+            Print / Download
+          </Button>
           {canEditInvoice && (
             <Link to={`/invoices/${invoice.id}/edit`}>
               <Button variant="outline">Edit</Button>
@@ -150,7 +161,7 @@ export default function InvoiceDetail() {
           <div className="mt-6 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="py-2 pr-3 font-medium">Description</th>
                   <th className="py-2 pr-3 font-medium">HSN/SAC</th>
                   <th className="py-2 pr-3 text-right font-medium">Qty</th>
@@ -162,7 +173,7 @@ export default function InvoiceDetail() {
               </thead>
               <tbody>
                 {invoice.lineItems.map((item, idx) => (
-                  <tr key={item.id || idx} className="border-b border-slate-50 last:border-0">
+                  <tr key={item.id || idx} className="border-b border-slate-100/70 last:border-0">
                     <td className="py-2 pr-3 text-slate-800">{item.description}</td>
                     <td className="py-2 pr-3 text-slate-500">{item.hsnSacCode || '-'}</td>
                     <td className="py-2 pr-3 text-right text-slate-600">
@@ -231,16 +242,16 @@ export default function InvoiceDetail() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Date</th>
-                  <th className="px-5 py-2.5 font-medium">Amount</th>
-                  <th className="px-5 py-2.5 font-medium">Mode</th>
-                  <th className="px-5 py-2.5 font-medium">Reference</th>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium">Mode</th>
+                  <th className="px-5 py-3 font-medium">Reference</th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.payments.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-50 last:border-0">
+                  <tr key={p.id} className="border-b border-slate-100/70 last:border-0">
                     <td className="px-5 py-2.5 text-slate-600">{formatDate(p.paymentDate)}</td>
                     <td className="px-5 py-2.5 font-medium text-slate-900">{formatCurrency(p.amount)}</td>
                     <td className="px-5 py-2.5 capitalize text-slate-600">{p.paymentMode.replace('_', ' ')}</td>
@@ -254,6 +265,14 @@ export default function InvoiceDetail() {
       </Card>
 
       {paymentModalOpen && <RecordPaymentModal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} invoice={invoice} />}
+      {previewOpen && (
+        <DocumentPreviewModal
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          invoice={invoice}
+          defaultDesign={preferences?.downloadDesign ?? preferences?.printDesign ?? 'classic'}
+        />
+      )}
     </div>
   );
 }

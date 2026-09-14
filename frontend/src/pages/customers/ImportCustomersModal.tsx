@@ -85,7 +85,7 @@ export function ImportCustomersModal({ open, onClose }: { open: boolean; onClose
         <button
           type="button"
           onClick={downloadTemplate}
-          className="text-xs font-medium text-indigo-600 hover:underline"
+          className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-700"
         >
           Download sample template (.csv)
         </button>
@@ -102,8 +102,8 @@ export function ImportCustomersModal({ open, onClose }: { open: boolean; onClose
             handleFile(e.dataTransfer.files[0]);
           }}
           onClick={() => inputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-            dragOver ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:border-slate-400'
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition duration-150 ${
+            dragOver ? 'border-indigo-500 bg-indigo-50/70' : 'border-slate-300 hover:border-slate-400'
           }`}
         >
           <input

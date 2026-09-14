@@ -75,8 +75,8 @@ export default function InvoicesList() {
       </div>
 
       <Card>
-        <div className="flex flex-wrap gap-3 border-b border-slate-100 p-4">
-          <Input placeholder="Search invoice #…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <div className="flex flex-wrap gap-3 border-b border-slate-100 bg-slate-50/40 p-4">
+          <Input type="search" name="invoice-search" autoComplete="off" enterKeyHint="search" placeholder="Search invoice #…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <Select value={status} onChange={(e) => setStatus(e.target.value)} className="max-w-[180px]">
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -97,29 +97,29 @@ export default function InvoicesList() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Invoice #</th>
-                  <th className="px-5 py-2.5 font-medium">Customer</th>
-                  <th className="px-5 py-2.5 font-medium">Date</th>
-                  <th className="px-5 py-2.5 font-medium">Due</th>
-                  <th className="px-5 py-2.5 font-medium">Amount</th>
-                  <th className="px-5 py-2.5 font-medium">Balance</th>
-                  <th className="px-5 py-2.5 font-medium">Status</th>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3 font-medium">Invoice #</th>
+                  <th className="px-5 py-3 font-medium">Customer</th>
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Due</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium">Balance</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                  <tr key={inv.id} className="border-b border-slate-100/70 transition-colors last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
-                      <Link to={`/invoices/${inv.id}`} className="font-medium text-indigo-600 hover:underline">
+                      <Link to={`/invoices/${inv.id}`} className="font-medium text-indigo-600 transition-colors hover:text-indigo-700">
                         {inv.invoiceNumber}
                       </Link>
                     </td>
                     <td className="px-5 py-3 text-slate-700">{inv.customerName}</td>
                     <td className="px-5 py-3 text-slate-500">{formatDate(inv.invoiceDate)}</td>
                     <td className="px-5 py-3 text-slate-500">{formatDate(inv.dueDate)}</td>
-                    <td className="px-5 py-3 font-medium text-slate-900">{formatCurrency(inv.grandTotal)}</td>
-                    <td className="px-5 py-3 text-slate-600">{formatCurrency(inv.balanceDue)}</td>
+                    <td className="px-5 py-3 font-medium tabular-nums text-slate-900">{formatCurrency(inv.grandTotal)}</td>
+                    <td className="px-5 py-3 tabular-nums text-slate-600">{formatCurrency(inv.balanceDue)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={inv.status} />
                     </td>

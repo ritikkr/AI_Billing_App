@@ -9,13 +9,13 @@ interface FieldWrapperProps {
 }
 
 const fieldBase =
-  'block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500';
+  'block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 disabled:bg-slate-50 disabled:text-slate-500 disabled:hover:border-slate-200';
 
 function Wrapper({ label, error, hint, required, children }: FieldWrapperProps & { children: React.ReactNode }) {
   return (
     <label className="block">
       {label && (
-        <span className="mb-1 block text-xs font-medium text-slate-700">
+        <span className="mb-1.5 block text-xs font-medium text-slate-700">
           {label}
           {required && <span className="text-red-500"> *</span>}
         </span>

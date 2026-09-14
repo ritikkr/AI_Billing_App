@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '../../components/ui/Modal';
 import { Input, Select, Textarea } from '../../components/ui/Input';
@@ -18,6 +18,11 @@ export function ItemFormModal({ open, onClose, item }: { open: boolean; onClose:
 
   const [form, setForm] = useState(() => toValues(item));
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setForm(toValues(item));
+    setError('');
+  }, [item?.id]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -58,8 +63,33 @@ export function ItemFormModal({ open, onClose, item }: { open: boolean; onClose:
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={item ? 'Edit item' : 'New item'}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={item ? 'Edit item' : 'New item'}
+      subtitle={item ? `ID ${item.id.slice(0, 8)}` : 'Add a product or service you sell'}
+      icon={
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.8}
+            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+          />
+        </svg>
+      }
+      headerActions={
+        <>
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form="item-form" size="sm" loading={mutation.isPending}>
+            {item ? 'Save changes' : 'Create item'}
+          </Button>
+        </>
+      }
+    >
+      <form id="item-form" onSubmit={handleSubmit} className="space-y-4">
         {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         <Input label="Item / Service name" required value={form.name} onChange={(e) => update('name', e.target.value)} />
         <Textarea label="Description" rows={2} value={form.description} onChange={(e) => update('description', e.target.value)} />
@@ -111,15 +141,6 @@ export function ItemFormModal({ open, onClose, item }: { open: boolean; onClose:
         {form.trackInventory && (
           <Input label="Current stock quantity" type="number" value={form.stockQty} onChange={(e) => update('stockQty', e.target.value)} />
         )}
-
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={mutation.isPending}>
-            {item ? 'Save changes' : 'Create item'}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

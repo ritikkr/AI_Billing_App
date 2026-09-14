@@ -81,19 +81,19 @@ export default function CreditNoteDetail() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-2.5 font-medium">Description</th>
-                <th className="px-5 py-2.5 font-medium">HSN/SAC</th>
-                <th className="px-5 py-2.5 text-right font-medium">Qty</th>
-                <th className="px-5 py-2.5 text-right font-medium">Rate</th>
-                <th className="px-5 py-2.5 text-right font-medium">Taxable</th>
-                <th className="px-5 py-2.5 text-right font-medium">Tax</th>
-                <th className="px-5 py-2.5 text-right font-medium">Total</th>
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3 font-medium">Description</th>
+                <th className="px-5 py-3 font-medium">HSN/SAC</th>
+                <th className="px-5 py-3 text-right font-medium">Qty</th>
+                <th className="px-5 py-3 text-right font-medium">Rate</th>
+                <th className="px-5 py-3 text-right font-medium">Taxable</th>
+                <th className="px-5 py-3 text-right font-medium">Tax</th>
+                <th className="px-5 py-3 text-right font-medium">Total</th>
               </tr>
             </thead>
             <tbody>
               {note.lineItems.map((item, idx) => (
-                <tr key={item.id || idx} className="border-b border-slate-50 last:border-0">
+                <tr key={item.id || idx} className="border-b border-slate-100/70 last:border-0">
                   <td className="px-5 py-2.5 text-slate-800">{item.description}</td>
                   <td className="px-5 py-2.5 text-slate-500">{item.hsnSacCode || '-'}</td>
                   <td className="px-5 py-2.5 text-right text-slate-600">

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://localhost:4000/api');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -43,6 +43,9 @@ apiClient.interceptors.response.use(
 );
 
 export function apiErrorMessage(err: unknown, fallback = 'Something went wrong'): string {
+  if (axios.isAxiosError(err) && !err.response) {
+    return 'Cannot reach the server. Check your connection and that the server is running.';
+  }
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as any;
     if (data?.error) return data.error;

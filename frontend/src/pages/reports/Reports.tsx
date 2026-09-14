@@ -31,12 +31,12 @@ export default function Reports() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        <div className="flex gap-1 rounded-xl bg-slate-100/90 p-1 shadow-xs ring-1 ring-slate-200/60">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={clsx('rounded-md px-3 py-1.5 text-sm font-medium transition-colors', tab === t.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
+              className={clsx('rounded-lg px-3 py-1.5 text-sm font-medium transition duration-150', tab === t.key ? 'bg-white text-indigo-700 shadow-card' : 'text-slate-600 hover:text-slate-900')}
             >
               {t.label}
             </button>
@@ -78,7 +78,7 @@ function SalesRegister({ from, to }: { from: string; to: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
               <th className="px-5 py-2.5 font-medium">Invoice #</th>
               <th className="px-5 py-2.5 font-medium">Date</th>
               <th className="px-5 py-2.5 font-medium">Customer</th>
@@ -93,7 +93,7 @@ function SalesRegister({ from, to }: { from: string; to: string }) {
           </thead>
           <tbody>
             {data.map((r: any) => (
-              <tr key={r.invoiceNumber} className="border-b border-slate-50 last:border-0">
+              <tr key={r.invoiceNumber} className="border-b border-slate-100/70 transition-colors last:border-0">
                 <td className="px-5 py-2.5 font-medium text-indigo-700">{r.invoiceNumber}</td>
                 <td className="px-5 py-2.5 text-slate-500">{formatDate(r.invoiceDate)}</td>
                 <td className="px-5 py-2.5 text-slate-700">{r.customerName}</td>
@@ -143,7 +143,7 @@ function GstSummary({ from, to }: { from: string; to: string }) {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
                 <th className="px-5 py-2.5 font-medium">Rate</th>
                 <th className="px-5 py-2.5 text-right font-medium">Taxable</th>
                 <th className="px-5 py-2.5 text-right font-medium">CGST</th>
@@ -153,7 +153,7 @@ function GstSummary({ from, to }: { from: string; to: string }) {
             </thead>
             <tbody>
               {data.byRate.map((r: any) => (
-                <tr key={r.gstRate} className="border-b border-slate-50 last:border-0">
+                <tr key={r.gstRate} className="border-b border-slate-100/70 transition-colors last:border-0">
                   <td className="px-5 py-2.5 font-medium text-slate-900">{r.gstRate}%</td>
                   <td className="px-5 py-2.5 text-right text-slate-700">{formatCurrency(r.taxableValue)}</td>
                   <td className="px-5 py-2.5 text-right text-slate-700">{formatCurrency(r.cgst)}</td>
@@ -172,7 +172,7 @@ function GstSummary({ from, to }: { from: string; to: string }) {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
                 <th className="px-5 py-2.5 font-medium">Segment</th>
                 <th className="px-5 py-2.5 text-right font-medium">Invoices</th>
                 <th className="px-5 py-2.5 text-right font-medium">Total</th>
@@ -180,7 +180,7 @@ function GstSummary({ from, to }: { from: string; to: string }) {
             </thead>
             <tbody>
               {data.b2bVsB2c.map((r: any) => (
-                <tr key={r.segment} className="border-b border-slate-50 last:border-0">
+                <tr key={r.segment} className="border-b border-slate-100/70 transition-colors last:border-0">
                   <td className="px-5 py-2.5 font-medium text-slate-900">{r.segment}</td>
                   <td className="px-5 py-2.5 text-right text-slate-700">{r.invoiceCount}</td>
                   <td className="px-5 py-2.5 text-right text-slate-700">{formatCurrency(r.total)}</td>
@@ -210,7 +210,7 @@ function HsnSummary({ from, to }: { from: string; to: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
               <th className="px-5 py-2.5 font-medium">HSN/SAC</th>
               <th className="px-5 py-2.5 font-medium">Unit</th>
               <th className="px-5 py-2.5 text-right font-medium">Qty</th>
@@ -223,7 +223,7 @@ function HsnSummary({ from, to }: { from: string; to: string }) {
           </thead>
           <tbody>
             {data.map((r: any) => (
-              <tr key={r.hsnSacCode + r.unit} className="border-b border-slate-50 last:border-0">
+              <tr key={r.hsnSacCode + r.unit} className="border-b border-slate-100/70 transition-colors last:border-0">
                 <td className="px-5 py-2.5 font-medium text-slate-900">{r.hsnSacCode}</td>
                 <td className="px-5 py-2.5 text-slate-500">{r.unit}</td>
                 <td className="px-5 py-2.5 text-right text-slate-700">{r.totalQty}</td>
@@ -257,7 +257,7 @@ function Aging() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
               <th className="px-5 py-2.5 font-medium">Customer</th>
               <th className="px-5 py-2.5 text-right font-medium">Current</th>
               <th className="px-5 py-2.5 text-right font-medium">1-30 days</th>
@@ -269,7 +269,7 @@ function Aging() {
           </thead>
           <tbody>
             {data.map((r: any) => (
-              <tr key={r.customerId} className="border-b border-slate-50 last:border-0">
+              <tr key={r.customerId} className="border-b border-slate-100/70 transition-colors last:border-0">
                 <td className="px-5 py-2.5 font-medium text-slate-900">{r.customerName}</td>
                 <td className="px-5 py-2.5 text-right text-slate-700">{formatCurrency(r.current)}</td>
                 <td className="px-5 py-2.5 text-right text-slate-700">{formatCurrency(r.d30)}</td>

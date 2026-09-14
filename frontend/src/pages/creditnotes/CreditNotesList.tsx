@@ -59,31 +59,31 @@ export default function CreditNotesList() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Note #</th>
-                  <th className="px-5 py-2.5 font-medium">Type</th>
-                  <th className="px-5 py-2.5 font-medium">Customer</th>
-                  <th className="px-5 py-2.5 font-medium">Date</th>
-                  <th className="px-5 py-2.5 font-medium">Amount</th>
-                  <th className="px-5 py-2.5 font-medium">Status</th>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3 font-medium">Note #</th>
+                  <th className="px-5 py-3 font-medium">Type</th>
+                  <th className="px-5 py-3 font-medium">Customer</th>
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((n) => (
-                  <tr key={n.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                  <tr key={n.id} className="border-b border-slate-100/70 transition-colors last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
-                      <Link to={`/credit-notes/${n.id}`} className="font-medium text-indigo-600 hover:underline">
+                      <Link to={`/credit-notes/${n.id}`} className="font-medium text-indigo-600 transition-colors hover:text-indigo-700">
                         {n.noteNumber}
                       </Link>
                     </td>
                     <td className="px-5 py-3">
-                      <Badge className={n.noteType === 'credit' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}>
+                      <Badge className={n.noteType === 'credit' ? 'bg-blue-50 text-blue-700 ring-blue-600/10' : 'bg-purple-50 text-purple-700 ring-purple-600/10'}>
                         {n.noteType === 'credit' ? 'Credit Note' : 'Debit Note'}
                       </Badge>
                     </td>
                     <td className="px-5 py-3 text-slate-700">{n.customerName}</td>
                     <td className="px-5 py-3 text-slate-500">{formatDate(n.noteDate)}</td>
-                    <td className="px-5 py-3 font-medium text-slate-900">{formatCurrency(n.grandTotal)}</td>
+                    <td className="px-5 py-3 font-medium tabular-nums text-slate-900">{formatCurrency(n.grandTotal)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={n.status} />
                     </td>

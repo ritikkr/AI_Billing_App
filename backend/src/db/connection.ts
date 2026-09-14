@@ -33,4 +33,27 @@ export function runMigrations() {
   if (!existing.has('customer_group')) {
     db.exec(`ALTER TABLE customers ADD COLUMN customer_group TEXT`);
   }
+
+  // Rebuild company_preferences when it predates the 'vyapar' design option.
+  // SQLite cannot ALTER a CHECK constraint, so recreate the table in place.
+  const pref = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'company_preferences'`).get() as
+    | { sql: string }
+    | undefined;
+  if (pref && !pref.sql.includes('vyapar')) {
+    const migrate = db.transaction(() => {
+      db.exec(`ALTER TABLE company_preferences RENAME TO company_preferences_old`);
+      db.exec(`CREATE TABLE company_preferences (
+        company_id TEXT PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+        print_design TEXT NOT NULL DEFAULT 'classic' CHECK (print_design IN ('classic', 'modern', 'minimal', 'vyapar')),
+        download_design TEXT NOT NULL DEFAULT 'classic' CHECK (download_design IN ('classic', 'modern', 'minimal', 'vyapar')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.exec(
+        `INSERT INTO company_preferences (company_id, print_design, download_design, updated_at)
+         SELECT company_id, print_design, download_design, updated_at FROM company_preferences_old`
+      );
+      db.exec(`DROP TABLE company_preferences_old`);
+    });
+    migrate();
+  }
 }
