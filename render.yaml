@@ -22,10 +22,9 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: TURSO_DATABASE_URL
-        sync: false
         value: https://your-database-name-org.turso.io
       - key: TURSO_AUTH_TOKEN
-        sync: false
+        value: PASTE_YOUR_TURSO_TOKEN_HERE  # Replace via Render dashboard after blueprint apply
       # Fallback local DB (only used if TURSO_* are unset) — lives on the
       # ephemeral Render disk and will be wiped on redeploy, so prefer Turso.
       - key: DATA_DIR
