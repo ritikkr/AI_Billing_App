@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchMeta } from '../api/meta';
 import { Input, Select, Textarea } from './ui/Input';
 import { Button } from './ui/Button';
 import { validateGSTIN } from '../utils/gst';
+import { apiErrorMessage } from '../api/client';
+import { uploadCompanyLogo, removeCompanyLogo, uploadCompanySignature, removeCompanySignature } from '../api/companies';
+import { useToast } from '../context/ToastContext';
 import type { Company } from '../types';
 
 export interface CompanyFormValues {
@@ -144,6 +147,30 @@ export function CompanyForm({
         </div>
       </section>
 
+      {initial?.id && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Branding (shown on invoices)</h3>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <BrandingUpload
+              label="Company logo"
+              value={initial.logoUrl}
+              fileKind="logo"
+              companyId={initial.id}
+              hint="PNG or JPG, max 2MB. Appears at the top of invoices."
+              placeholder="No logo uploaded"
+            />
+            <BrandingUpload
+              label="Authorized signatory signature"
+              value={initial.signatureUrl}
+              fileKind="signature"
+              companyId={initial.id}
+              hint="PNG or JPG, max 2MB. Printed in the signatory area of invoices."
+              placeholder="No signature uploaded"
+            />
+          </div>
+        </section>
+      )}
+
       <section>
         <h3 className="mb-3 text-sm font-semibold text-slate-900">Invoicing preferences</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -207,4 +234,92 @@ function buildPayload(values: CompanyFormValues, states: { code: string; name: s
     financialYearStartMonth: values.financialYearStartMonth,
     termsAndConditions: values.termsAndConditions || null,
   };
+}
+
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+function BrandingUpload({
+  label,
+  value,
+  fileKind,
+  companyId,
+  hint,
+  placeholder,
+}: {
+  label: string;
+  value: string | null;
+  fileKind: 'logo' | 'signature';
+  companyId: string;
+  hint: string;
+  placeholder: string;
+}) {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File): Promise<{ logoUrl: string } | { signatureUrl: string }> =>
+      fileKind === 'logo' ? uploadCompanyLogo(companyId, file) : uploadCompanySignature(companyId, file),
+    onSuccess: async () => {
+      notify(fileKind === 'logo' ? 'Logo uploaded' : 'Signature uploaded');
+      await queryClient.invalidateQueries({ queryKey: ['company', companyId] });
+    },
+    onError: (err) => notify(apiErrorMessage(err, 'Upload failed'), 'error'),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (): Promise<{ logoUrl: null } | { signatureUrl: null }> =>
+      fileKind === 'logo' ? removeCompanyLogo(companyId) : removeCompanySignature(companyId),
+    onSuccess: async () => {
+      notify(fileKind === 'logo' ? 'Logo removed' : 'Signature removed');
+      await queryClient.invalidateQueries({ queryKey: ['company', companyId] });
+    },
+    onError: (err) => notify(apiErrorMessage(err, 'Could not remove image'), 'error'),
+  });
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      notify('Please choose an image file (PNG or JPG)', 'error');
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      notify('Image must be smaller than 2MB', 'error');
+      return;
+    }
+    uploadMutation.mutate(file);
+  }
+
+  return (
+    <div>
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <div className="mt-2 flex items-center gap-3">
+        {value ? (
+          <img
+            src={value}
+            alt={label}
+            className="h-12 w-auto max-w-[160px] rounded border border-slate-200 bg-white object-contain p-1"
+          />
+        ) : (
+          <div className="flex h-12 w-32 shrink-0 items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50 px-2 text-center text-xs text-slate-400">
+            {placeholder}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} loading={uploadMutation.isPending}>
+            {value ? 'Change' : 'Upload'}
+          </Button>
+          {value && (
+            <Button type="button" variant="outline" size="sm" onClick={() => removeMutation.mutate()} loading={removeMutation.isPending}>
+              Remove
+            </Button>
+          )}
+        </div>
+        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleFileChange} />
+      </div>
+      <p className="mt-1 text-xs text-slate-400">{hint}</p>
+    </div>
+  );
 }

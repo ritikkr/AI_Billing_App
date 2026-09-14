@@ -27,11 +27,11 @@ function rowToPreferences(row: any) {
   };
 }
 
-function getPreferencesRow(companyId: string) {
-  let row = db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(companyId) as any;
+async function getPreferencesRow(companyId: string) {
+  let row = (await db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(companyId)) as any;
   if (!row) {
-    db.prepare(`INSERT INTO company_preferences (company_id) VALUES (?)`).run(companyId);
-    row = db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(companyId) as any;
+    await db.prepare(`INSERT INTO company_preferences (company_id) VALUES (?)`).run(companyId);
+    row = (await db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(companyId)) as any;
   }
   return row;
 }
@@ -67,9 +67,9 @@ preferencesRouter.get(
    *         description: Not a member of this company
    */
   asyncHandler(async (req, res) => {
-    const company = db.prepare(`SELECT id FROM companies WHERE id = ?`).get(req.companyId);
+    const company = await db.prepare(`SELECT id FROM companies WHERE id = ?`).get(req.companyId);
     if (!company) throw new ApiError(404, 'Company not found');
-    res.json(rowToPreferences(getPreferencesRow(req.companyId!)));
+    res.json(rowToPreferences(await getPreferencesRow(req.companyId!)));
   })
 );
 
@@ -107,9 +107,9 @@ preferencesRouter.put(
   requireRole('admin'),
   asyncHandler(async (req, res) => {
     const body = preferencesSchema.parse(req.body);
-    const company = db.prepare(`SELECT id FROM companies WHERE id = ?`).get(req.companyId);
+    const company = await db.prepare(`SELECT id FROM companies WHERE id = ?`).get(req.companyId);
     if (!company) throw new ApiError(404, 'Company not found');
-    db.prepare(
+    await db.prepare(
       `INSERT INTO company_preferences (company_id, print_design, download_design, updated_at)
        VALUES (?, ?, ?, datetime('now'))
        ON CONFLICT(company_id) DO UPDATE SET
@@ -117,7 +117,7 @@ preferencesRouter.put(
          download_design = excluded.download_design,
          updated_at = datetime('now')`
     ).run(req.companyId, body.printDesign, body.downloadDesign);
-    const row = db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(req.companyId);
+    const row = await db.prepare(`SELECT * FROM company_preferences WHERE company_id = ?`).get(req.companyId);
     res.json(rowToPreferences(row));
   })
 );

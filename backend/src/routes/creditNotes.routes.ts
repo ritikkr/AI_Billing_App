@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { db } from '../db/connection.js';
+import { db, type DbLike } from '../db/connection.js';
 import { newId } from '../utils/id.js';
 import { asyncHandler, ApiError } from '../utils/asyncHandler.js';
 import { requireRole } from '../middleware/auth.js';
@@ -69,12 +69,12 @@ creditNotesRouter.get(
       clauses.push('cn.customer_id = ?');
       params.push(customerId);
     }
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT cn.*, c.name as customer_name FROM credit_notes cn JOIN customers c ON c.id = cn.customer_id
          WHERE ${clauses.join(' AND ')} ORDER BY cn.note_date DESC, cn.created_at DESC`
       )
-      .all(...params) as any[];
+      .all(...params)) as any[];
     res.json(rows.map((r) => ({ ...rowToNote(r), customerName: r.customer_name })));
   })
 );
@@ -82,11 +82,11 @@ creditNotesRouter.get(
 creditNotesRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const row = db.prepare(`SELECT * FROM credit_notes WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const row = (await db.prepare(`SELECT * FROM credit_notes WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!row) throw new ApiError(404, 'Credit/debit note not found');
-    const items = db.prepare(`SELECT * FROM credit_note_items WHERE credit_note_id = ?`).all(req.params.id) as any[];
-    const customer = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(row.customer_id);
-    const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(row.company_id);
+    const items = (await db.prepare(`SELECT * FROM credit_note_items WHERE credit_note_id = ?`).all(req.params.id)) as any[];
+    const customer = await db.prepare(`SELECT * FROM customers WHERE id = ?`).get(row.customer_id);
+    const company = await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(row.company_id);
     res.json({
       ...rowToNote(row),
       customer,
@@ -115,11 +115,11 @@ creditNotesRouter.post(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = noteSchema.parse(req.body);
-    const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId) as any;
-    const customer = db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(body.customerId, req.companyId) as any;
+    const company = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
+    const customer = (await db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(body.customerId, req.companyId)) as any;
     if (!customer) throw new ApiError(404, 'Customer not found');
     if (body.invoiceId) {
-      const invoice = db.prepare(`SELECT id FROM invoices WHERE id = ? AND company_id = ?`).get(body.invoiceId, req.companyId);
+      const invoice = await db.prepare(`SELECT id FROM invoices WHERE id = ? AND company_id = ?`).get(body.invoiceId, req.companyId);
       if (!invoice) throw new ApiError(404, 'Referenced invoice not found');
     }
 
@@ -133,65 +133,67 @@ creditNotesRouter.post(
     const series = body.noteType === 'debit' ? 'debit_note' : 'credit_note';
 
     const id = newId();
-    const tx = db.transaction(() => {
-      const noteNumber = nextDocumentNumber(req.companyId!, series, noteDate);
-      db.prepare(
-        `INSERT INTO credit_notes (
-          id, company_id, note_type, note_number, financial_year, note_date, customer_id, invoice_id, reason,
-          place_of_supply_state_code, is_interstate, taxable_value, total_cgst, total_sgst, total_igst,
-          round_off, grand_total, status, notes, created_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'issued',?,?)`
-      ).run(
-        id,
-        req.companyId,
-        body.noteType,
-        noteNumber,
-        fy,
-        body.noteDate,
-        body.customerId,
-        body.invoiceId || null,
-        body.reason || null,
-        placeOfSupply,
-        isInterstate ? 1 : 0,
-        totals.taxableValue,
-        totals.totalCgst,
-        totals.totalSgst,
-        totals.totalIgst,
-        totals.roundOff,
-        totals.grandTotal,
-        body.notes || null,
-        req.user!.id
-      );
-
-      const insertItem = db.prepare(
-        `INSERT INTO credit_note_items (
-          id, credit_note_id, item_id, description, hsn_sac_code, qty, unit, rate,
-          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      );
-      body.lineItems.forEach((l, idx) => {
-        const t = taxedLines[idx];
-        insertItem.run(
-          newId(),
+    await db.transaction(async (tx) => {
+      const noteNumber = await nextDocumentNumber(req.companyId!, series, noteDate, tx);
+      await tx
+        .prepare(
+          `INSERT INTO credit_notes (
+            id, company_id, note_type, note_number, financial_year, note_date, customer_id, invoice_id, reason,
+            place_of_supply_state_code, is_interstate, taxable_value, total_cgst, total_sgst, total_igst,
+            round_off, grand_total, status, notes, created_by
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'issued',?,?)`
+        )
+        .run(
           id,
-          l.itemId || null,
-          l.description,
-          l.hsnSacCode || null,
-          l.qty,
-          l.unit || 'NOS',
-          l.rate,
-          t.taxableValue,
-          l.gstRate,
-          t.cgstAmount,
-          t.sgstAmount,
-          t.igstAmount,
-          t.lineTotal
+          req.companyId,
+          body.noteType,
+          noteNumber,
+          fy,
+          body.noteDate,
+          body.customerId,
+          body.invoiceId || null,
+          body.reason || null,
+          placeOfSupply,
+          isInterstate ? 1 : 0,
+          totals.taxableValue,
+          totals.totalCgst,
+          totals.totalSgst,
+          totals.totalIgst,
+          totals.roundOff,
+          totals.grandTotal,
+          body.notes || null,
+          req.user!.id
         );
-      });
-    });
-    tx();
 
-    const row = db.prepare(`SELECT * FROM credit_notes WHERE id = ?`).get(id);
+      for (const [idx, l] of body.lineItems.entries()) {
+        const t = taxedLines[idx];
+        await tx
+          .prepare(
+            `INSERT INTO credit_note_items (
+              id, credit_note_id, item_id, description, hsn_sac_code, qty, unit, rate,
+              taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            newId(),
+            id,
+            l.itemId || null,
+            l.description,
+            l.hsnSacCode || null,
+            l.qty,
+            l.unit || 'NOS',
+            l.rate,
+            t.taxableValue,
+            l.gstRate,
+            t.cgstAmount,
+            t.sgstAmount,
+            t.igstAmount,
+            t.lineTotal
+          );
+      }
+    });
+
+    const row = await db.prepare(`SELECT * FROM credit_notes WHERE id = ?`).get(id);
     res.status(201).json(rowToNote(row));
   })
 );
@@ -200,9 +202,9 @@ creditNotesRouter.post(
   '/:id/cancel',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM credit_notes WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
+    const current = await db.prepare(`SELECT * FROM credit_notes WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
     if (!current) throw new ApiError(404, 'Note not found');
-    db.prepare(`UPDATE credit_notes SET status = 'cancelled' WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
+    await db.prepare(`UPDATE credit_notes SET status = 'cancelled' WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
     res.json({ status: 'cancelled' });
   })
 );

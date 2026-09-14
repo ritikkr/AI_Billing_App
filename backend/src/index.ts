@@ -18,7 +18,7 @@ import { pdfImportRouter } from './routes/pdfImport.routes.js';
 import { preferencesRouter } from './routes/preferences.routes.js';
 import { INDIAN_STATES, GST_RATE_SLABS, UNITS, PAYMENT_MODES } from './services/gst.constants.js';
 
-runMigrations();
+await runMigrations();
 
 const app = express();
 app.use(cors());

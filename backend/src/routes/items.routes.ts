@@ -96,7 +96,7 @@ itemsRouter.get(
    */
   asyncHandler(async (req, res) => {
     const search = (req.query.search as string) || '';
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM items WHERE company_id = ? AND (name LIKE ? OR hsn_sac_code LIKE ?) ORDER BY name`)
       .all(req.companyId, `%${search}%`, `%${search}%`);
     res.json(rows.map(rowToItem));
@@ -119,7 +119,7 @@ itemsRouter.get(
 itemsRouter.get(
   '/summary',
   asyncHandler(async (req, res) => {
-    const totals = db
+    const totals = (await db
       .prepare(
         `SELECT
            COUNT(*) as total,
@@ -129,11 +129,11 @@ itemsRouter.get(
            SUM(CASE WHEN track_inventory = 1 AND stock_qty IS NOT NULL THEN stock_qty ELSE 0 END) as stockUnits
          FROM items WHERE company_id = ?`
       )
-      .get(req.companyId) as any;
+      .get(req.companyId)) as any;
 
-    const tracked = db
+    const tracked = (await db
       .prepare(`SELECT stock_qty, sale_price, purchase_price FROM items WHERE company_id = ? AND track_inventory = 1`)
-      .all(req.companyId) as any[];
+      .all(req.companyId)) as any[];
 
     const lowStockThreshold = Number(req.query.lowStockThreshold) || 10;
     const stockValue = tracked.reduce((sum, i) => sum + (i.stock_qty || 0) * (i.purchase_price || 0), 0);
@@ -158,7 +158,7 @@ itemsRouter.get(
 itemsRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const row = db.prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
+    const row = await db.prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
     if (!row) throw new ApiError(404, 'Item not found');
     res.json(rowToItem(row));
   })
@@ -170,7 +170,7 @@ itemsRouter.post(
   asyncHandler(async (req, res) => {
     const body = itemSchema.parse(req.body);
     const id = newId();
-    db.prepare(
+    await db.prepare(
       `INSERT INTO items (id, company_id, name, description, hsn_sac_code, item_type, unit, sale_price,
         purchase_price, gst_rate, stock_qty, track_inventory)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
@@ -188,7 +188,7 @@ itemsRouter.post(
       body.stockQty ?? null,
       body.trackInventory ? 1 : 0
     );
-    const row = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id);
+    const row = await db.prepare(`SELECT * FROM items WHERE id = ?`).get(id);
     res.status(201).json(rowToItem(row));
   })
 );
@@ -249,33 +249,33 @@ itemsRouter.post(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = bulkSchema.parse(req.body);
-    const insert = db.prepare(
-      `INSERT INTO items (id, company_id, name, description, hsn_sac_code, item_type, unit, sale_price,
-        purchase_price, gst_rate, stock_qty, track_inventory)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
-    );
-    const fetch = db.prepare(`SELECT * FROM items WHERE id = ?`);
-    const created = db.transaction(() => {
-      return body.items.map((it) => {
+    const created = await db.transaction(async (tx) => {
+      return body.items.map(async (it) => {
         const id = newId();
-        insert.run(
-          id,
-          req.companyId,
-          it.name,
-          it.description || null,
-          it.hsnSacCode || null,
-          it.itemType || 'goods',
-          it.unit || 'NOS',
-          it.salePrice,
-          it.purchasePrice ?? null,
-          it.gstRate,
-          it.stockQty ?? null,
-          it.trackInventory ? 1 : 0
-        );
-        return rowToItem(fetch.get(id));
+        await tx
+          .prepare(
+            `INSERT INTO items (id, company_id, name, description, hsn_sac_code, item_type, unit, sale_price,
+              purchase_price, gst_rate, stock_qty, track_inventory)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            id,
+            req.companyId,
+            it.name,
+            it.description || null,
+            it.hsnSacCode || null,
+            it.itemType || 'goods',
+            it.unit || 'NOS',
+            it.salePrice,
+            it.purchasePrice ?? null,
+            it.gstRate,
+            it.stockQty ?? null,
+            it.trackInventory ? 1 : 0
+          );
+        return rowToItem(await tx.prepare(`SELECT * FROM items WHERE id = ?`).get(id));
       });
-    })();
-    res.status(201).json(created);
+    });
+    res.status(201).json(await Promise.all(created));
   })
 );
 
@@ -284,13 +284,13 @@ itemsRouter.post(
   '/:id/duplicate',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db
+    const current = (await db
       .prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`)
-      .get(req.params.id, req.companyId) as any;
+      .get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Item not found');
 
     const id = newId();
-    db.prepare(
+    await db.prepare(
       `INSERT INTO items (id, company_id, name, description, hsn_sac_code, item_type, unit, sale_price,
         purchase_price, gst_rate, stock_qty, track_inventory, is_active)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
@@ -309,7 +309,7 @@ itemsRouter.post(
       current.track_inventory,
       current.is_active
     );
-    const row = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id);
+    const row = await db.prepare(`SELECT * FROM items WHERE id = ?`).get(id);
     res.status(201).json(rowToItem(row));
   })
 );
@@ -354,20 +354,13 @@ itemsRouter.patch(
     const b = body.data;
 
     const placeholders = body.ids.map(() => '?').join(',');
-    const rows = db
+    const rows = (await db
       .prepare(`SELECT * FROM items WHERE id IN (${placeholders}) AND company_id = ?`)
-      .all(...body.ids, req.companyId) as any[];
+      .all(...body.ids, req.companyId)) as any[];
     if (rows.length === 0) throw new ApiError(404, 'No items found');
 
-    const update = db.prepare(
-      `UPDATE items SET name=?, description=?, hsn_sac_code=?, item_type=?, unit=?, sale_price=?,
-       purchase_price=?, gst_rate=?, stock_qty=?, track_inventory=?, is_active=?, updated_at=datetime('now')
-       WHERE id=? AND company_id=?`
-    );
-    const fetch = db.prepare(`SELECT * FROM items WHERE id = ?`);
-
-    const updated = db.transaction(() => {
-      return rows.map((current: any) => {
+    const updated = await db.transaction(async (tx) => {
+      return rows.map(async (current: any) => {
         const m = {
           name: b.name ?? current.name,
           description: b.description ?? current.description,
@@ -382,14 +375,21 @@ itemsRouter.patch(
             b.trackInventory === undefined ? current.track_inventory : b.trackInventory ? 1 : 0,
           is_active: b.isActive === undefined ? current.is_active : b.isActive ? 1 : 0,
         };
-        update.run(
-          m.name, m.description, m.hsn_sac_code, m.item_type, m.unit, m.sale_price, m.purchase_price,
-          m.gst_rate, m.stock_qty, m.track_inventory, m.is_active, current.id, req.companyId
-        );
-        return rowToItem(fetch.get(current.id));
+        await tx
+          .prepare(
+            `UPDATE items SET name=?, description=?, hsn_sac_code=?, item_type=?, unit=?, sale_price=?,
+             purchase_price=?, gst_rate=?, stock_qty=?, track_inventory=?, is_active=?, updated_at=datetime('now')
+             WHERE id=? AND company_id=?`
+          )
+          .run(
+            m.name, m.description, m.hsn_sac_code, m.item_type, m.unit, m.sale_price, m.purchase_price,
+            m.gst_rate, m.stock_qty, m.track_inventory, m.is_active, current.id, req.companyId
+          );
+        return rowToItem(await tx.prepare(`SELECT * FROM items WHERE id = ?`).get(current.id));
       });
-    })();
-    res.json({ updated: updated.length, items: updated });
+    });
+    const updatedItems = await Promise.all(updated);
+    res.json({ updated: updatedItems.length, items: updatedItems });
   })
 );
 
@@ -398,7 +398,7 @@ itemsRouter.patch(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = itemSchema.partial().parse(req.body);
-    const current = db.prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Item not found');
 
     const m = {
@@ -415,7 +415,7 @@ itemsRouter.patch(
       is_active: body.isActive === undefined ? current.is_active : body.isActive ? 1 : 0,
     };
 
-    db.prepare(
+    await db.prepare(
       `UPDATE items SET name=?, description=?, hsn_sac_code=?, item_type=?, unit=?, sale_price=?,
        purchase_price=?, gst_rate=?, stock_qty=?, track_inventory=?, is_active=?, updated_at=datetime('now')
        WHERE id=? AND company_id=?`
@@ -424,7 +424,7 @@ itemsRouter.patch(
       m.gst_rate, m.stock_qty, m.track_inventory, m.is_active, req.params.id, req.companyId
     );
 
-    const row = db.prepare(`SELECT * FROM items WHERE id = ?`).get(req.params.id);
+    const row = await db.prepare(`SELECT * FROM items WHERE id = ?`).get(req.params.id);
     res.json(rowToItem(row));
   })
 );
@@ -472,9 +472,9 @@ itemsRouter.patch(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = stockSchema.parse(req.body);
-    const current = db
+    const current = (await db
       .prepare(`SELECT * FROM items WHERE id = ? AND company_id = ?`)
-      .get(req.params.id, req.companyId) as any;
+      .get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Item not found');
     if (!current.track_inventory) {
       throw new ApiError(400, 'Item does not track inventory; enable trackInventory first');
@@ -488,12 +488,12 @@ itemsRouter.patch(
           ? base - body.stockQty
           : body.stockQty;
 
-    db.prepare(`UPDATE items SET stock_qty = ?, updated_at = datetime('now') WHERE id=? AND company_id=?`).run(
+    await db.prepare(`UPDATE items SET stock_qty = ?, updated_at = datetime('now') WHERE id=? AND company_id=?`).run(
       nextQty,
       req.params.id,
       req.companyId
     );
-    const row = db.prepare(`SELECT * FROM items WHERE id = ?`).get(req.params.id);
+    const row = await db.prepare(`SELECT * FROM items WHERE id = ?`).get(req.params.id);
     res.json({ ...rowToItem(row), previousStockQty: base, adjustmentMode: body.mode, reason: body.reason || null });
   })
 );
@@ -536,30 +536,25 @@ itemsRouter.delete(
     const archives: string[] = [];
     const missing: string[] = [];
 
-    const archiver = db.prepare(
-      `UPDATE items SET is_active = 0, updated_at = datetime('now') WHERE id=? AND company_id=?`
-    );
-    const remover = db.prepare(`DELETE FROM items WHERE id = ? AND company_id = ?`);
-
-    db.transaction(() => {
+    await db.transaction(async (tx) => {
       for (const id of body.ids) {
-        const row = db
+        const row = (await tx
           .prepare(`SELECT id, is_active FROM items WHERE id = ? AND company_id = ?`)
-          .get(id, req.companyId) as any;
+          .get(id, req.companyId)) as any;
         if (!row) {
           missing.push(id);
           continue;
         }
-        const used = db.prepare(`SELECT COUNT(*) as n FROM invoice_items WHERE item_id = ?`).get(id) as any;
+        const used = (await tx.prepare(`SELECT COUNT(*) as n FROM invoice_items WHERE item_id = ?`).get(id)) as any;
         if (used.n > 0) {
-          archiver.run(id, req.companyId);
+          await tx.prepare(`UPDATE items SET is_active = 0, updated_at = datetime('now') WHERE id=? AND company_id=?`).run(id, req.companyId);
           archives.push(id);
         } else {
-          remover.run(id, req.companyId);
+          await tx.prepare(`DELETE FROM items WHERE id = ? AND company_id = ?`).run(id, req.companyId);
           dels.push(id);
         }
       }
-    })();
+    });
 
     res.json({
       deleted: dels,
@@ -575,15 +570,15 @@ itemsRouter.delete(
   '/:id',
   requireRole('admin'),
   asyncHandler(async (req, res) => {
-    const used = db.prepare(`SELECT COUNT(*) as n FROM invoice_items WHERE item_id = ?`).get(req.params.id) as any;
+    const used = (await db.prepare(`SELECT COUNT(*) as n FROM invoice_items WHERE item_id = ?`).get(req.params.id)) as any;
     if (used.n > 0) {
-      db.prepare(`UPDATE items SET is_active = 0, updated_at=datetime('now') WHERE id=? AND company_id=?`).run(
+      await db.prepare(`UPDATE items SET is_active = 0, updated_at=datetime('now') WHERE id=? AND company_id=?`).run(
         req.params.id,
         req.companyId
       );
       return res.json({ archived: true });
     }
-    db.prepare(`DELETE FROM items WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
+    await db.prepare(`DELETE FROM items WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
     res.status(204).send();
   })
 );

@@ -88,14 +88,14 @@ function rowToLineItem(row: any) {
   };
 }
 
-function getCustomerOrThrow(companyId: string, customerId: string) {
-  const customer = db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(customerId, companyId) as any;
+async function getCustomerOrThrow(companyId: string, customerId: string) {
+  const customer = (await db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(customerId, companyId)) as any;
   if (!customer) throw new ApiError(404, 'Customer not found');
   return customer;
 }
 
-function getCompanyOrThrow(companyId: string) {
-  const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(companyId) as any;
+async function getCompanyOrThrow(companyId: string) {
+  const company = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(companyId)) as any;
   if (!company) throw new ApiError(404, 'Company not found');
   return company;
 }
@@ -187,12 +187,12 @@ invoicesRouter.get(
       clauses.push('i.invoice_date <= ?');
       params.push(to);
     }
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT i.*, c.name as customer_name FROM invoices i JOIN customers c ON c.id = i.customer_id
          WHERE ${clauses.join(' AND ')} ORDER BY i.invoice_date DESC, i.created_at DESC`
       )
-      .all(...params) as any[];
+      .all(...params)) as any[];
     res.json(rows.map((r) => ({ ...rowToInvoice(r), customerName: r.customer_name })));
   })
 );
@@ -202,8 +202,8 @@ invoicesRouter.post(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = invoiceSchema.omit({ status: true }).partial({ invoiceDate: true }).parse(req.body);
-    const company = getCompanyOrThrow(req.companyId!);
-    const customer = getCustomerOrThrow(req.companyId!, body.customerId);
+    const company = await getCompanyOrThrow(req.companyId!);
+    const customer = await getCustomerOrThrow(req.companyId!, body.customerId);
     const placeOfSupply = body.placeOfSupplyStateCode || customer.billing_state_code || company.state_code;
     const { isInterstate, taxedLines, totals } = computeInvoiceTotals(company, placeOfSupply, body.lineItems);
     res.json({
@@ -218,7 +218,7 @@ invoicesRouter.post(
 invoicesRouter.get(
   '/summary',
   asyncHandler(async (req, res) => {
-    const counts = db
+    const counts = (await db
       .prepare(
         `SELECT
            COUNT(*) as total,
@@ -233,16 +233,16 @@ invoicesRouter.get(
            SUM(CASE WHEN status != 'cancelled' THEN grand_total - amount_paid ELSE 0 END) as totalOutstanding
          FROM invoices WHERE company_id = ?`
       )
-      .get(req.companyId) as any;
+      .get(req.companyId)) as any;
 
-    const overdue = db
+    const overdue = (await db
       .prepare(
         `SELECT COUNT(*) as count, COALESCE(SUM(grand_total - amount_paid), 0) as amount
          FROM invoices
          WHERE company_id = ? AND status IN ('sent', 'partially_paid', 'overdue')
            AND due_date IS NOT NULL AND due_date < date('now') AND grand_total > amount_paid`
       )
-      .get(req.companyId) as any;
+      .get(req.companyId)) as any;
 
     res.json({
       counts: {
@@ -268,15 +268,15 @@ invoicesRouter.get(
   asyncHandler(async (req, res) => {
     const date = req.query.date ? new Date(String(req.query.date)) : new Date();
     if (Number.isNaN(date.getTime())) throw new ApiError(400, 'Invalid date');
-    const company = db
+    const company = (await db
       .prepare(`SELECT financial_year_start_month, invoice_prefix FROM companies WHERE id = ?`)
-      .get(req.companyId) as any;
+      .get(req.companyId)) as any;
     if (!company) throw new ApiError(404, 'Company not found');
 
     const fy = financialYearLabel(date, company.financial_year_start_month || 4);
-    const counter = db
+    const counter = (await db
       .prepare(`SELECT last_number FROM invoice_counters WHERE company_id = ? AND financial_year = ? AND series = 'invoice'`)
-      .get(req.companyId, fy) as any;
+      .get(req.companyId, fy)) as any;
     const nextNumber = (counter?.last_number === undefined ? 0 : counter.last_number) + 1;
     const prefix = company.invoice_prefix || 'INV';
 
@@ -291,7 +291,7 @@ invoicesRouter.get(
 invoicesRouter.get(
   '/overdue',
   asyncHandler(async (req, res) => {
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT i.*, c.name as customer_name,
            CAST(julianday('now') - julianday(i.due_date) AS INTEGER) as days_overdue
@@ -300,7 +300,7 @@ invoicesRouter.get(
            AND i.due_date IS NOT NULL AND i.due_date < date('now') AND i.grand_total > i.amount_paid
          ORDER BY i.due_date ASC`
       )
-      .all(req.companyId) as any[];
+      .all(req.companyId)) as any[];
 
     const bucket = (days: number) =>
       days <= 30 ? '0-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+';
@@ -324,14 +324,14 @@ invoicesRouter.get(
 invoicesRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const row = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const row = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!row) throw new ApiError(404, 'Invoice not found');
-    const items = db.prepare(`SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order`).all(req.params.id) as any[];
-    const customer = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(row.customer_id);
-    const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(row.company_id);
-    const payments = db
+    const items = (await db.prepare(`SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order`).all(req.params.id)) as any[];
+    const customer = await db.prepare(`SELECT * FROM customers WHERE id = ?`).get(row.customer_id);
+    const company = await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(row.company_id);
+    const payments = (await db
       .prepare(`SELECT * FROM payments WHERE invoice_id = ? ORDER BY payment_date DESC, created_at DESC`)
-      .all(req.params.id) as any[];
+      .all(req.params.id)) as any[];
 
     res.json({
       ...rowToInvoice(row),
@@ -356,8 +356,8 @@ invoicesRouter.post(
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
     const body = invoiceSchema.parse(req.body);
-    const company = getCompanyOrThrow(req.companyId!);
-    const customer = getCustomerOrThrow(req.companyId!, body.customerId);
+    const company = await getCompanyOrThrow(req.companyId!);
+    const customer = await getCustomerOrThrow(req.companyId!, body.customerId);
     const placeOfSupply = body.placeOfSupplyStateCode || customer.billing_state_code || company.state_code;
     const { isInterstate, taxedLines, totals } = computeInvoiceTotals(company, placeOfSupply, body.lineItems);
 
@@ -365,71 +365,73 @@ invoicesRouter.post(
     const fy = financialYearLabel(invoiceDate, company.financial_year_start_month || 4);
 
     const id = newId();
-    const tx = db.transaction(() => {
-      const invoiceNumber = nextDocumentNumber(req.companyId!, 'invoice', invoiceDate);
-      db.prepare(
-        `INSERT INTO invoices (
-          id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
-          place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
-          total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
-          notes, terms, reverse_charge, created_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
-      ).run(
-        id,
-        req.companyId,
-        invoiceNumber,
-        fy,
-        body.invoiceDate,
-        body.dueDate || null,
-        body.customerId,
-        placeOfSupply,
-        isInterstate ? 1 : 0,
-        totals.subtotal,
-        totals.totalDiscount,
-        totals.taxableValue,
-        totals.totalCgst,
-        totals.totalSgst,
-        totals.totalIgst,
-        totals.roundOff,
-        totals.grandTotal,
-        body.status || 'draft',
-        body.notes || null,
-        body.terms || null,
-        body.reverseCharge ? 1 : 0,
-        req.user!.id
-      );
-
-      const insertItem = db.prepare(
-        `INSERT INTO invoice_items (
-          id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
-          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      );
-      body.lineItems.forEach((l, idx) => {
-        const t = taxedLines[idx];
-        insertItem.run(
-          newId(),
+    await db.transaction(async (tx) => {
+      const invoiceNumber = await nextDocumentNumber(req.companyId!, 'invoice', invoiceDate, tx);
+      await tx
+        .prepare(
+          `INSERT INTO invoices (
+            id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
+            place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
+            total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
+            notes, terms, reverse_charge, created_by
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
+        )
+        .run(
           id,
-          l.itemId || null,
-          l.description,
-          l.hsnSacCode || null,
-          l.qty,
-          l.unit || 'NOS',
-          l.rate,
-          l.discountPercent || 0,
-          t.taxableValue,
-          l.gstRate,
-          t.cgstAmount,
-          t.sgstAmount,
-          t.igstAmount,
-          t.lineTotal,
-          idx
+          req.companyId,
+          invoiceNumber,
+          fy,
+          body.invoiceDate,
+          body.dueDate || null,
+          body.customerId,
+          placeOfSupply,
+          isInterstate ? 1 : 0,
+          totals.subtotal,
+          totals.totalDiscount,
+          totals.taxableValue,
+          totals.totalCgst,
+          totals.totalSgst,
+          totals.totalIgst,
+          totals.roundOff,
+          totals.grandTotal,
+          body.status || 'draft',
+          body.notes || null,
+          body.terms || null,
+          body.reverseCharge ? 1 : 0,
+          req.user!.id
         );
-      });
-    });
-    tx();
 
-    const row = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(id);
+      for (const [idx, l] of body.lineItems.entries()) {
+        const t = taxedLines[idx];
+        await tx
+          .prepare(
+            `INSERT INTO invoice_items (
+              id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
+              taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            newId(),
+            id,
+            l.itemId || null,
+            l.description,
+            l.hsnSacCode || null,
+            l.qty,
+            l.unit || 'NOS',
+            l.rate,
+            l.discountPercent || 0,
+            t.taxableValue,
+            l.gstRate,
+            t.cgstAmount,
+            t.sgstAmount,
+            t.igstAmount,
+            t.lineTotal,
+            idx
+          );
+      }
+    });
+
+    const row = await db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(id);
     res.status(201).json(rowToInvoice(row));
   })
 );
@@ -438,78 +440,80 @@ invoicesRouter.patch(
   '/:id',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Invoice not found');
     if (!['draft', 'sent'].includes(current.status)) {
       throw new ApiError(400, `Cannot edit an invoice with status "${current.status}"`);
     }
 
     const body = invoiceSchema.parse(req.body);
-    const company = getCompanyOrThrow(req.companyId!);
-    const customer = getCustomerOrThrow(req.companyId!, body.customerId);
+    const company = await getCompanyOrThrow(req.companyId!);
+    const customer = await getCustomerOrThrow(req.companyId!, body.customerId);
     const placeOfSupply = body.placeOfSupplyStateCode || customer.billing_state_code || company.state_code;
     const { isInterstate, taxedLines, totals } = computeInvoiceTotals(company, placeOfSupply, body.lineItems);
 
-    const tx = db.transaction(() => {
-      db.prepare(
-        `UPDATE invoices SET invoice_date=?, due_date=?, customer_id=?, place_of_supply_state_code=?, is_interstate=?,
-         subtotal=?, total_discount=?, taxable_value=?, total_cgst=?, total_sgst=?, total_igst=?, round_off=?,
-         grand_total=?, status=?, notes=?, terms=?, reverse_charge=?, updated_at=datetime('now')
-         WHERE id=? AND company_id=?`
-      ).run(
-        body.invoiceDate,
-        body.dueDate || null,
-        body.customerId,
-        placeOfSupply,
-        isInterstate ? 1 : 0,
-        totals.subtotal,
-        totals.totalDiscount,
-        totals.taxableValue,
-        totals.totalCgst,
-        totals.totalSgst,
-        totals.totalIgst,
-        totals.roundOff,
-        totals.grandTotal,
-        body.status || current.status,
-        body.notes || null,
-        body.terms || null,
-        body.reverseCharge ? 1 : 0,
-        req.params.id,
-        req.companyId
-      );
-
-      db.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(req.params.id);
-      const insertItem = db.prepare(
-        `INSERT INTO invoice_items (
-          id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
-          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      );
-      body.lineItems.forEach((l, idx) => {
-        const t = taxedLines[idx];
-        insertItem.run(
-          newId(),
+    await db.transaction(async (tx) => {
+      await tx
+        .prepare(
+          `UPDATE invoices SET invoice_date=?, due_date=?, customer_id=?, place_of_supply_state_code=?, is_interstate=?,
+           subtotal=?, total_discount=?, taxable_value=?, total_cgst=?, total_sgst=?, total_igst=?, round_off=?,
+           grand_total=?, status=?, notes=?, terms=?, reverse_charge=?, updated_at=datetime('now')
+           WHERE id=? AND company_id=?`
+        )
+        .run(
+          body.invoiceDate,
+          body.dueDate || null,
+          body.customerId,
+          placeOfSupply,
+          isInterstate ? 1 : 0,
+          totals.subtotal,
+          totals.totalDiscount,
+          totals.taxableValue,
+          totals.totalCgst,
+          totals.totalSgst,
+          totals.totalIgst,
+          totals.roundOff,
+          totals.grandTotal,
+          body.status || current.status,
+          body.notes || null,
+          body.terms || null,
+          body.reverseCharge ? 1 : 0,
           req.params.id,
-          l.itemId || null,
-          l.description,
-          l.hsnSacCode || null,
-          l.qty,
-          l.unit || 'NOS',
-          l.rate,
-          l.discountPercent || 0,
-          t.taxableValue,
-          l.gstRate,
-          t.cgstAmount,
-          t.sgstAmount,
-          t.igstAmount,
-          t.lineTotal,
-          idx
+          req.companyId
         );
-      });
-    });
-    tx();
 
-    const row = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(req.params.id);
+      await tx.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(req.params.id);
+      for (const [idx, l] of body.lineItems.entries()) {
+        const t = taxedLines[idx];
+        await tx
+          .prepare(
+            `INSERT INTO invoice_items (
+              id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
+              taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            newId(),
+            req.params.id,
+            l.itemId || null,
+            l.description,
+            l.hsnSacCode || null,
+            l.qty,
+            l.unit || 'NOS',
+            l.rate,
+            l.discountPercent || 0,
+            t.taxableValue,
+            l.gstRate,
+            t.cgstAmount,
+            t.sgstAmount,
+            t.igstAmount,
+            t.lineTotal,
+            idx
+          );
+      }
+    });
+
+    const row = await db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(req.params.id);
     res.json(rowToInvoice(row));
   })
 );
@@ -518,10 +522,10 @@ invoicesRouter.post(
   '/:id/cancel',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Invoice not found');
     if (current.amount_paid > 0) throw new ApiError(400, 'Cannot cancel an invoice that has payments recorded against it');
-    db.prepare(`UPDATE invoices SET status = 'cancelled', updated_at=datetime('now') WHERE id = ? AND company_id = ?`).run(
+    await db.prepare(`UPDATE invoices SET status = 'cancelled', updated_at=datetime('now') WHERE id = ? AND company_id = ?`).run(
       req.params.id,
       req.companyId
     );
@@ -533,15 +537,15 @@ invoicesRouter.post(
   '/:id/mark-sent',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Invoice not found');
     if (current.status === 'cancelled') throw new ApiError(400, 'Cannot send a cancelled invoice');
     if (current.status !== 'draft') throw new ApiError(400, `Invoice is already "${current.status}"`);
-    db.prepare(`UPDATE invoices SET status = 'sent', updated_at = datetime('now') WHERE id = ? AND company_id = ?`).run(
+    await db.prepare(`UPDATE invoices SET status = 'sent', updated_at = datetime('now') WHERE id = ? AND company_id = ?`).run(
       req.params.id,
       req.companyId
     );
-    const row = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(req.params.id);
+    const row = await db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(req.params.id);
     res.json(rowToInvoice(row));
   })
 );
@@ -550,79 +554,81 @@ invoicesRouter.post(
   '/:id/duplicate',
   requireRole('admin', 'accountant'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Invoice not found');
 
-    const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId) as any;
+    const company = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
 
     const id = newId();
-    const tx = db.transaction(() => {
-      const invoiceNumber = nextDocumentNumber(req.companyId!, 'invoice', new Date());
-      db.prepare(
-        `INSERT INTO invoices (
-          id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
-          place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
-          total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
-          notes, terms, reverse_charge, created_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
-      ).run(
-        id,
-        req.companyId,
-        invoiceNumber,
-        financialYearLabel(new Date(), company.financial_year_start_month || 4),
-        current.invoice_date,
-        current.due_date,
-        current.customer_id,
-        current.place_of_supply_state_code,
-        current.is_interstate,
-        current.subtotal,
-        current.total_discount,
-        current.taxable_value,
-        current.total_cgst,
-        current.total_sgst,
-        current.total_igst,
-        current.round_off,
-        current.grand_total,
-        'draft',
-        current.notes,
-        current.terms,
-        current.reverse_charge,
-        req.user!.id
-      );
-
-      const insertItem = db.prepare(
-        `INSERT INTO invoice_items (
-          id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
-          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      );
-      const lineItems = db
-        .prepare(`SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order`)
-        .all(req.params.id) as any[];
-      lineItems.forEach((l) => {
-        insertItem.run(
-          newId(),
+    await db.transaction(async (tx) => {
+      const invoiceNumber = await nextDocumentNumber(req.companyId!, 'invoice', new Date(), tx);
+      await tx
+        .prepare(
+          `INSERT INTO invoices (
+            id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
+            place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
+            total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
+            notes, terms, reverse_charge, created_by
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
+        )
+        .run(
           id,
-          l.item_id,
-          l.description,
-          l.hsn_sac_code,
-          l.qty,
-          l.unit,
-          l.rate,
-          l.discount_percent,
-          l.taxable_value,
-          l.gst_rate,
-          l.cgst_amount,
-          l.sgst_amount,
-          l.igst_amount,
-          l.line_total,
-          l.sort_order
+          req.companyId,
+          invoiceNumber,
+          financialYearLabel(new Date(), company.financial_year_start_month || 4),
+          current.invoice_date,
+          current.due_date,
+          current.customer_id,
+          current.place_of_supply_state_code,
+          current.is_interstate,
+          current.subtotal,
+          current.total_discount,
+          current.taxable_value,
+          current.total_cgst,
+          current.total_sgst,
+          current.total_igst,
+          current.round_off,
+          current.grand_total,
+          'draft',
+          current.notes,
+          current.terms,
+          current.reverse_charge,
+          req.user!.id
         );
-      });
-    });
-    tx();
 
-    const row = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(id);
+      const lineItems = (await tx
+        .prepare(`SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order`)
+        .all(req.params.id)) as any[];
+      for (const l of lineItems) {
+        await tx
+          .prepare(
+            `INSERT INTO invoice_items (
+              id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
+              taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            newId(),
+            id,
+            l.item_id,
+            l.description,
+            l.hsn_sac_code,
+            l.qty,
+            l.unit,
+            l.rate,
+            l.discount_percent,
+            l.taxable_value,
+            l.gst_rate,
+            l.cgst_amount,
+            l.sgst_amount,
+            l.igst_amount,
+            l.line_total,
+            l.sort_order
+          );
+      }
+    });
+
+    const row = await db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(id);
     res.status(201).json(rowToInvoice(row));
   })
 );
@@ -665,9 +671,9 @@ invoicesRouter.delete(
     const skipped: Array<{ id: string; reason: string }> = [];
     const notFound: string[] = [];
 
-    db.transaction(() => {
+    await db.transaction(async (tx) => {
       for (const id of body.ids) {
-        const row = db.prepare(`SELECT status FROM invoices WHERE id = ? AND company_id = ?`).get(id, req.companyId) as any;
+        const row = (await tx.prepare(`SELECT status FROM invoices WHERE id = ? AND company_id = ?`).get(id, req.companyId)) as any;
         if (!row) {
           notFound.push(id);
           continue;
@@ -676,10 +682,10 @@ invoicesRouter.delete(
           skipped.push({ id, reason: `status is "${row.status}"` });
           continue;
         }
-        db.prepare(`DELETE FROM invoices WHERE id = ?`).run(id);
+        await tx.prepare(`DELETE FROM invoices WHERE id = ?`).run(id);
         deleted.push(id);
       }
-    })();
+    });
 
     res.json({ deleted, deletedCount: deleted.length, skipped, skippedCount: skipped.length, notFound });
   })
@@ -689,10 +695,10 @@ invoicesRouter.delete(
   '/:id',
   requireRole('admin'),
   asyncHandler(async (req, res) => {
-    const current = db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM invoices WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Invoice not found');
     if (current.status !== 'draft') throw new ApiError(400, 'Only draft invoices can be deleted; cancel it instead');
-    db.prepare(`DELETE FROM invoices WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
+    await db.prepare(`DELETE FROM invoices WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
     res.status(204).send();
   })
 );

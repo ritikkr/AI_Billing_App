@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS companies (
   debit_note_prefix TEXT NOT NULL DEFAULT 'DN',
   financial_year_start_month INTEGER NOT NULL DEFAULT 4,
   logo_url TEXT,
+  signature_url TEXT,
   terms_and_conditions TEXT,
   created_by TEXT REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

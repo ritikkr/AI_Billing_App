@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import { db } from '../db/connection.js';
+import { db, type DbLike } from '../db/connection.js';
 import { newId } from '../utils/id.js';
 import { asyncHandler, ApiError } from '../utils/asyncHandler.js';
 import { requireRole } from '../middleware/auth.js';
@@ -99,7 +99,7 @@ customersRouter.get(
       where += ' AND (name LIKE ? OR gstin LIKE ? OR email LIKE ? OR customer_group LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
-    const rows = db
+    const rows = await db
       .prepare(`SELECT * FROM customers WHERE ${where} ORDER BY name`)
       .all(...params);
     res.json(rows.map(rowToCustomer));
@@ -134,11 +134,11 @@ customersRouter.get(
 customersRouter.get(
   '/groups',
   asyncHandler(async (req, res) => {
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT DISTINCT customer_group FROM customers WHERE company_id = ? AND customer_group IS NOT NULL AND customer_group != '' ORDER BY customer_group`
       )
-      .all(req.companyId) as Array<{ customer_group: string }>;
+      .all(req.companyId)) as Array<{ customer_group: string }>;
     res.json(rows.map((r) => r.customer_group));
   })
 );
@@ -172,15 +172,15 @@ customersRouter.get(
 customersRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const row = db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
+    const row = await db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId);
     if (!row) throw new ApiError(404, 'Customer not found');
 
-    const invoices = db
+    const invoices = (await db
       .prepare(
         `SELECT id, invoice_number, invoice_date, grand_total, amount_paid, status FROM invoices
          WHERE customer_id = ? AND company_id = ? ORDER BY invoice_date DESC`
       )
-      .all(req.params.id, req.companyId) as any[];
+      .all(req.params.id, req.companyId)) as any[];
 
     const outstanding = invoices.reduce((sum, inv) => {
       if (inv.status === 'cancelled') return sum;
@@ -233,7 +233,7 @@ customersRouter.post(
       if (!v.valid) throw new ApiError(400, `Invalid GSTIN: ${v.reason}`);
     }
     const id = newId();
-    db.prepare(
+    await db.prepare(
       `INSERT INTO customers (
         id, company_id, name, customer_group, gstin, pan, email, phone,
         billing_address, shipping_address,
@@ -256,7 +256,7 @@ customersRouter.post(
       body.payableBalance || 0,
       body.notes || null
     );
-    const row = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(id);
+    const row = await db.prepare(`SELECT * FROM customers WHERE id = ?`).get(id);
     res.status(201).json(rowToCustomer(row));
   })
 );
@@ -318,9 +318,13 @@ function mapImportRow(row: Record<string, unknown>) {
   };
 }
 
-function findExistingCustomer(companyId: string | undefined, data: ReturnType<typeof mapImportRow>) {
+async function findExistingCustomer(
+  companyId: string | undefined,
+  data: ReturnType<typeof mapImportRow>,
+  tx: DbLike = db
+) {
   if (!data.gstin) return undefined;
-  return db.prepare(`SELECT * FROM customers WHERE gstin = ? AND company_id = ?`).get(data.gstin, companyId) as any;
+  return (await tx.prepare(`SELECT * FROM customers WHERE gstin = ? AND company_id = ?`).get(data.gstin, companyId)) as any;
 }
 
 /**
@@ -378,44 +382,32 @@ customersRouter.post(
     if (rows.length === 0) throw new ApiError(400, 'No rows found in the file.');
     if (rows.length > 2000) throw new ApiError(400, 'File contains too many rows (max 2000).');
 
-    const insert = db.prepare(
-      `INSERT INTO customers (id, company_id, name, customer_group, gstin, pan, email, phone, billing_address,
-        shipping_address, credit_limit, opening_balance, receivable_balance, payable_balance, notes)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    );
-    const update = db.prepare(
-      `UPDATE customers SET name=?, customer_group=?, gstin=?, pan=?, email=?, phone=?, billing_address=?,
-        shipping_address=?, credit_limit=?, opening_balance=?, receivable_balance=?, payable_balance=?,
-        notes=?, updated_at=datetime('now')
-       WHERE id=? AND company_id=?`
-    );
-
     const created: Array<{ row: number; name: string }> = [];
     const updatedRows: Array<{ row: number; id: string; name: string }> = [];
     const errors: Array<{ row: number; name: string; reason: string }> = [];
 
-    db.transaction(() => {
-      rows.forEach((rawRow, index) => {
+    await db.transaction(async (tx) => {
+      for (const [index, rawRow] of rows.entries()) {
         const rowNumber = index + 2; // 1 for headers
         const data = mapImportRow(rawRow);
 
         if (!data.name) {
           errors.push({ row: rowNumber, name: '', reason: 'Name is required' });
-          return;
+          continue;
         }
         if (data.email && !EMAIL_RE.test(data.email)) {
           errors.push({ row: rowNumber, name: data.name, reason: `Invalid email "${data.email}"` });
-          return;
+          continue;
         }
         if (data.gstin) {
           const v = validateGSTIN(data.gstin);
           if (!v.valid) {
             errors.push({ row: rowNumber, name: data.name, reason: `Invalid GSTIN "${data.gstin}": ${v.reason}` });
-            return;
+            continue;
           }
         }
 
-        const existing = findExistingCustomer(req.companyId, data);
+        const existing = await findExistingCustomer(req.companyId, data, tx);
 
         if (existing) {
           const merged = {
@@ -433,36 +425,49 @@ customersRouter.post(
             payable_balance: data.payableBalance ?? existing.payable_balance,
             notes: data.notes || existing.notes,
           };
-          update.run(
-            merged.name, merged.group, merged.gstin, merged.pan, merged.email, merged.phone, merged.billing_address,
-            merged.shipping_address, merged.credit_limit, merged.opening_balance, merged.receivable_balance,
-            merged.payable_balance, merged.notes, existing.id, req.companyId
-          );
+          await tx
+            .prepare(
+              `UPDATE customers SET name=?, customer_group=?, gstin=?, pan=?, email=?, phone=?, billing_address=?,
+                shipping_address=?, credit_limit=?, opening_balance=?, receivable_balance=?, payable_balance=?,
+                notes=?, updated_at=datetime('now')
+               WHERE id=? AND company_id=?`
+            )
+            .run(
+              merged.name, merged.group, merged.gstin, merged.pan, merged.email, merged.phone, merged.billing_address,
+              merged.shipping_address, merged.credit_limit, merged.opening_balance, merged.receivable_balance,
+              merged.payable_balance, merged.notes, existing.id, req.companyId
+            );
           updatedRows.push({ row: rowNumber, id: existing.id, name: data.name });
-          return;
+          continue;
         }
 
         const id = newId();
-        insert.run(
-          id,
-          req.companyId,
-          data.name,
-          data.group || null,
-          data.gstin || null,
-          data.pan || null,
-          data.email || null,
-          data.phone || null,
-          data.billingAddress || null,
-          data.shippingAddress || null,
-          data.creditLimit ?? 0,
-          data.openingBalance ?? 0,
-          data.receivableBalance ?? 0,
-          data.payableBalance ?? 0,
-          data.notes || null
-        );
+        await tx
+          .prepare(
+            `INSERT INTO customers (id, company_id, name, customer_group, gstin, pan, email, phone, billing_address,
+              shipping_address, credit_limit, opening_balance, receivable_balance, payable_balance, notes)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            id,
+            req.companyId,
+            data.name,
+            data.group || null,
+            data.gstin || null,
+            data.pan || null,
+            data.email || null,
+            data.phone || null,
+            data.billingAddress || null,
+            data.shippingAddress || null,
+            data.creditLimit ?? 0,
+            data.openingBalance ?? 0,
+            data.receivableBalance ?? 0,
+            data.payableBalance ?? 0,
+            data.notes || null
+          );
         created.push({ row: rowNumber, name: data.name });
-      });
-    })();
+      }
+    });
 
     res.json({
       total: rows.length,
@@ -511,7 +516,7 @@ customersRouter.patch(
       const v = validateGSTIN(body.gstin);
       if (!v.valid) throw new ApiError(400, `Invalid GSTIN: ${v.reason}`);
     }
-    const current = db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM customers WHERE id = ? AND company_id = ?`).get(req.params.id, req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Customer not found');
 
     const m = {
@@ -531,7 +536,7 @@ customersRouter.patch(
       is_active: body.isActive === undefined ? current.is_active : body.isActive ? 1 : 0,
     };
 
-    db.prepare(
+    await db.prepare(
       `UPDATE customers SET name=?, customer_group=?, gstin=?, pan=?, email=?, phone=?, billing_address=?,
        shipping_address=?, credit_limit=?, opening_balance=?, receivable_balance=?, payable_balance=?,
        notes=?, is_active=?, updated_at=datetime('now')
@@ -542,7 +547,7 @@ customersRouter.patch(
       req.params.id, req.companyId
     );
 
-    const row = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(req.params.id);
+    const row = await db.prepare(`SELECT * FROM customers WHERE id = ?`).get(req.params.id);
     res.json(rowToCustomer(row));
   })
 );
@@ -577,18 +582,18 @@ customersRouter.delete(
   '/:id',
   requireRole('admin'),
   asyncHandler(async (req, res) => {
-    const used = db.prepare(`SELECT COUNT(*) as n FROM invoices WHERE customer_id = ? AND company_id = ?`).get(
+    const used = (await db.prepare(`SELECT COUNT(*) as n FROM invoices WHERE customer_id = ? AND company_id = ?`).get(
       req.params.id,
       req.companyId
-    ) as any;
+    )) as any;
     if (used.n > 0) {
-      db.prepare(`UPDATE customers SET is_active = 0, updated_at=datetime('now') WHERE id=? AND company_id=?`).run(
+      await db.prepare(`UPDATE customers SET is_active = 0, updated_at=datetime('now') WHERE id=? AND company_id=?`).run(
         req.params.id,
         req.companyId
       );
       return res.json({ archived: true });
     }
-    db.prepare(`DELETE FROM customers WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
+    await db.prepare(`DELETE FROM customers WHERE id = ? AND company_id = ?`).run(req.params.id, req.companyId);
     res.status(204).send();
   })
 );

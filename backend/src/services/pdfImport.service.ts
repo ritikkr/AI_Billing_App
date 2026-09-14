@@ -259,7 +259,7 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
     throw new ApiError(400, 'No tax invoices could be found in the PDF.');
   }
 
-  const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(options.companyId) as any;
+  const company = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(options.companyId)) as any;
   if (!company) throw new ApiError(404, 'Company not found');
 
   const result: PdfImportResult = {
@@ -271,11 +271,7 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
     failed: [],
   };
 
-  const findCustomerByGstin = db.prepare(`SELECT * FROM customers WHERE gstin = ? AND company_id = ?`);
-  const findCustomerByName = db.prepare(`SELECT * FROM customers WHERE name = ? AND company_id = ?`);
-  const findInvoiceByIdNo = db.prepare(`SELECT id FROM invoices WHERE company_id = ? AND invoice_number = ?`);
-
-  db.transaction(() => {
+  await db.transaction(async (tx) => {
     const seenNumbers = new Set<string>();
 
     for (const inv of invoices) {
@@ -299,7 +295,7 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
           continue;
         }
         seenNumbers.add(inv.invoiceNo);
-        if (findInvoiceByIdNo.get(options.companyId, inv.invoiceNo)) {
+        if (await tx.prepare(`SELECT id FROM invoices WHERE company_id = ? AND invoice_number = ?`).get(options.companyId, inv.invoiceNo)) {
           skip('Invoice with this number already exists');
           continue;
         }
@@ -318,35 +314,34 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
 
       // Upsert customer keyed on GSTIN (fallback: exact name match when no GSTIN).
       let customer = inv.customer.gstin
-        ? (findCustomerByGstin.get(inv.customer.gstin, options.companyId) as any)
+        ? ((await tx.prepare(`SELECT * FROM customers WHERE gstin = ? AND company_id = ?`).get(inv.customer.gstin, options.companyId)) as any)
         : undefined;
       if (!customer && !inv.customer.gstin) {
-        customer = findCustomerByName.get(inv.customer.name, options.companyId) as any;
+        customer = (await tx.prepare(`SELECT * FROM customers WHERE name = ? AND company_id = ?`).get(inv.customer.name, options.companyId)) as any;
       }
 
       if (customer) {
-        db.prepare(`UPDATE customers SET name=?, billing_address=?, updated_at=datetime('now') WHERE id=? AND company_id=?`).run(
-          inv.customer.name,
-          inv.customer.billingAddress,
-          customer.id,
-          options.companyId
-        );
+        await tx
+          .prepare(`UPDATE customers SET name=?, billing_address=?, updated_at=datetime('now') WHERE id=? AND company_id=?`)
+          .run(inv.customer.name, inv.customer.billingAddress, customer.id, options.companyId);
         result.customers.updated++;
       } else {
         customer = {
           id: newId(),
         };
-        db.prepare(
-          `INSERT INTO customers (id, company_id, name, customer_group, gstin, email, phone,
-            billing_address, shipping_address, credit_limit, opening_balance, receivable_balance, payable_balance, notes)
-           VALUES (?,?,?,NULL,?,NULL,NULL,?,NULL,0,0,0,0,NULL)`
-        ).run(
-          customer.id,
-          options.companyId,
-          inv.customer.name,
-          inv.customer.gstin || null,
-          inv.customer.billingAddress || null
-        );
+        await tx
+          .prepare(
+            `INSERT INTO customers (id, company_id, name, customer_group, gstin, email, phone,
+              billing_address, shipping_address, credit_limit, opening_balance, receivable_balance, payable_balance, notes)
+             VALUES (?,?,?,NULL,?,NULL,NULL,?,NULL,0,0,0,0,NULL)`
+          )
+          .run(
+            customer.id,
+            options.companyId,
+            inv.customer.name,
+            inv.customer.gstin || null,
+            inv.customer.billingAddress || null
+          );
         result.customers.created++;
       }
 
@@ -367,65 +362,68 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
 
       const invoiceId = newId();
       const fy = financialYearLabel(new Date(inv.invoiceDate), company.financial_year_start_month || 4);
-      db.prepare(
-        `INSERT INTO invoices (
-          id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
-          place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
-          total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
-          notes, terms, reverse_charge, created_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
-      ).run(
-        invoiceId,
-        options.companyId,
-        inv.invoiceNo,
-        fy,
-        inv.invoiceDate,
-        null,
-        customer.id,
-        placeOfSupply,
-        isInterstate ? 1 : 0,
-        totals.subtotal,
-        totals.totalDiscount,
-        totals.taxableValue,
-        totals.totalCgst,
-        totals.totalSgst,
-        totals.totalIgst,
-        totals.roundOff,
-        totals.grandTotal,
-        options.status || 'sent',
-        null,
-        null,
-        0,
-        options.userId
-      );
-
-      const insertItem = db.prepare(
-        `INSERT INTO invoice_items (
-          id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
-          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      );
-      inv.lineItems.forEach((l, idx) => {
-        const t = taxedLines[idx];
-        insertItem.run(
-          newId(),
+      await tx
+        .prepare(
+          `INSERT INTO invoices (
+            id, company_id, invoice_number, financial_year, invoice_date, due_date, customer_id,
+            place_of_supply_state_code, is_interstate, subtotal, total_discount, taxable_value,
+            total_cgst, total_sgst, total_igst, round_off, grand_total, amount_paid, status,
+            notes, terms, reverse_charge, created_by
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`
+        )
+        .run(
           invoiceId,
+          options.companyId,
+          inv.invoiceNo,
+          fy,
+          inv.invoiceDate,
           null,
-          l.description,
-          l.hsnSacCode || null,
-          l.qty,
-          'NOS',
-          l.rate,
+          customer.id,
+          placeOfSupply,
+          isInterstate ? 1 : 0,
+          totals.subtotal,
+          totals.totalDiscount,
+          totals.taxableValue,
+          totals.totalCgst,
+          totals.totalSgst,
+          totals.totalIgst,
+          totals.roundOff,
+          totals.grandTotal,
+          options.status || 'sent',
+          null,
+          null,
           0,
-          t.taxableValue,
-          l.gstRate,
-          t.cgstAmount,
-          t.sgstAmount,
-          t.igstAmount,
-          t.lineTotal,
-          idx
+          options.userId
         );
-      });
+
+      for (const [idx, l] of inv.lineItems.entries()) {
+        const t = taxedLines[idx];
+        await tx
+          .prepare(
+            `INSERT INTO invoice_items (
+              id, invoice_id, item_id, description, hsn_sac_code, qty, unit, rate, discount_percent,
+              taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            newId(),
+            invoiceId,
+            null,
+            l.description,
+            l.hsnSacCode || null,
+            l.qty,
+            'NOS',
+            l.rate,
+            0,
+            t.taxableValue,
+            l.gstRate,
+            t.cgstAmount,
+            t.sgstAmount,
+            t.igstAmount,
+            t.lineTotal,
+            idx
+          );
+      }
 
       result.invoices.created++;
       result.created.push({
@@ -436,7 +434,7 @@ export async function importInvoicesFromPdf(buffer: Buffer, options: PdfImportOp
         grandTotal: totals.grandTotal,
       });
     }
-  })();
+  });
 
   return result;
 }

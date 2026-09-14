@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { amountInWords } from '../utils/gst';
 import type { InvoiceDetail, DocumentDesign } from '../types';
 
@@ -124,6 +124,9 @@ export function InvoicePdf({ invoice, design = 'classic' }: { invoice: InvoiceDe
         <View style={styles.headerWrap}>
           <View style={styles.headerRow}>
             <View style={{ maxWidth: '55%' }}>
+              {company.logo_url && (
+                <Image src={company.logo_url} style={{ height: 38, maxWidth: 140, objectFit: 'contain', marginBottom: 4, alignSelf: 'flex-start' }} />
+              )}
               <Text style={styles.companyName}>{company.name}</Text>
               <Text style={styles.small}>
                 {[company.address_line1, company.address_line2, company.city, company.state, company.pincode].filter(Boolean).join(', ')}
@@ -269,7 +272,10 @@ export function InvoicePdf({ invoice, design = 'classic' }: { invoice: InvoiceDe
 
         <View style={styles.stamp}>
           <Text style={styles.small}>For {company.name}</Text>
-          <Text style={{ ...styles.small, marginTop: 24 }}>Authorized Signatory</Text>
+          {company.signature_url && (
+            <Image src={company.signature_url} style={{ height: 42, maxWidth: 140, objectFit: 'contain', marginTop: 6 }} />
+          )}
+          <Text style={{ ...styles.small, marginTop: company.signature_url ? 3 : 24 }}>Authorized Signatory</Text>
         </View>
 
         <Text style={{ ...styles.small, marginTop: 16, textAlign: 'center', color: '#94a3b8' }}>
@@ -306,6 +312,9 @@ function VyaparPdf({ invoice }: { invoice: InvoiceDetail }) {
 
         <View style={{ ...BORDER, marginTop: 8, flexDirection: 'row' }}>
           <View style={{ ...BORDER, flexGrow: 1, flexBasis: 0, padding: 7 }}>
+            {company.logo_url && (
+              <Image src={company.logo_url} style={{ height: 34, maxWidth: 150, objectFit: 'contain', marginBottom: 4 }} />
+            )}
             <Text style={{ fontSize: 12, fontWeight: 700 }}>{company.name}</Text>
             <Text style={{ fontSize: 8, marginTop: 2 }}>
               {[company.address_line1, company.address_line2, company.city, company.state, company.pincode].filter(Boolean).join(', ')}
@@ -520,7 +529,10 @@ function VyaparPdf({ invoice }: { invoice: InvoiceDetail }) {
           </View>
           <View style={{ ...BORDER, width: '34%', padding: 6, alignItems: 'flex-end' }}>
             <Text style={{ fontSize: 8 }}>For : {company.name}</Text>
-            <Text style={{ fontSize: 8, fontWeight: 700, marginTop: 26 }}>Authorized Signatory</Text>
+            {company.signature_url && (
+              <Image src={company.signature_url} style={{ height: 38, maxWidth: 130, objectFit: 'contain', marginTop: 6 }} />
+            )}
+            <Text style={{ fontSize: 8, fontWeight: 700, marginTop: company.signature_url ? 2 : 26 }}>Authorized Signatory</Text>
           </View>
         </View>
       </Page>

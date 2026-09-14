@@ -10,7 +10,7 @@ reportsRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = req.companyId;
 
-    const totals = db
+    const totals = (await db
       .prepare(
         `SELECT
           COALESCE(SUM(CASE WHEN status != 'cancelled' AND status != 'draft' THEN grand_total ELSE 0 END), 0) as totalRevenue,
@@ -19,44 +19,44 @@ reportsRouter.get(
           COUNT(CASE WHEN status != 'cancelled' THEN 1 END) as invoiceCount
          FROM invoices WHERE company_id = ?`
       )
-      .get(companyId) as any;
+      .get(companyId)) as any;
 
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const thisMonth = db
+    const thisMonth = (await db
       .prepare(
         `SELECT COALESCE(SUM(grand_total), 0) as total FROM invoices
          WHERE company_id = ? AND status != 'cancelled' AND status != 'draft' AND invoice_date >= ?`
       )
-      .get(companyId, monthStart) as any;
+      .get(companyId, monthStart)) as any;
 
-    const topCustomers = db
+    const topCustomers = (await db
       .prepare(
         `SELECT c.id, c.name, COALESCE(SUM(i.grand_total), 0) as total, COUNT(i.id) as invoiceCount
          FROM customers c JOIN invoices i ON i.customer_id = c.id AND i.status != 'cancelled'
          WHERE c.company_id = ? GROUP BY c.id ORDER BY total DESC LIMIT 5`
       )
-      .all(companyId);
+      .all(companyId)) as any[];
 
-    const recentInvoices = db
+    const recentInvoices = (await db
       .prepare(
         `SELECT i.id, i.invoice_number as invoiceNumber, i.invoice_date as invoiceDate, i.grand_total as grandTotal,
                 i.status, c.name as customerName
          FROM invoices i JOIN customers c ON c.id = i.customer_id
          WHERE i.company_id = ? ORDER BY i.created_at DESC LIMIT 8`
       )
-      .all(companyId);
+      .all(companyId)) as any[];
 
-    const revenueTrend = db
+    const revenueTrend = (await db
       .prepare(
         `SELECT substr(invoice_date, 1, 7) as month, COALESCE(SUM(grand_total), 0) as total
          FROM invoices WHERE company_id = ? AND status != 'cancelled' AND status != 'draft'
          GROUP BY month ORDER BY month DESC LIMIT 12`
       )
-      .all(companyId);
+      .all(companyId)) as any[];
 
-    const customerCount = db.prepare(`SELECT COUNT(*) as n FROM customers WHERE company_id = ? AND is_active = 1`).get(companyId) as any;
-    const itemCount = db.prepare(`SELECT COUNT(*) as n FROM items WHERE company_id = ? AND is_active = 1`).get(companyId) as any;
+    const customerCount = (await db.prepare(`SELECT COUNT(*) as n FROM customers WHERE company_id = ? AND is_active = 1`).get(companyId)) as any;
+    const itemCount = (await db.prepare(`SELECT COUNT(*) as n FROM items WHERE company_id = ? AND is_active = 1`).get(companyId)) as any;
 
     res.json({
       totalRevenue: round2(totals.totalRevenue),
@@ -68,7 +68,7 @@ reportsRouter.get(
       itemCount: itemCount.n,
       topCustomers,
       recentInvoices,
-      revenueTrend: (revenueTrend as any[]).reverse(),
+      revenueTrend: revenueTrend.reverse(),
     });
   })
 );
@@ -87,7 +87,7 @@ reportsRouter.get(
       clauses.push('i.invoice_date <= ?');
       params.push(to);
     }
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT i.invoice_number as invoiceNumber, i.invoice_date as invoiceDate, c.name as customerName, c.gstin,
                 i.place_of_supply_state_code as placeOfSupply, i.is_interstate as isInterstate,
@@ -96,7 +96,7 @@ reportsRouter.get(
          FROM invoices i JOIN customers c ON c.id = i.customer_id
          WHERE ${clauses.join(' AND ')} ORDER BY i.invoice_date`
       )
-      .all(...params);
+      .all(...params)) as any[];
     res.json(rows);
   })
 );
@@ -115,7 +115,7 @@ reportsRouter.get(
       clauses.push('i.invoice_date <= ?');
       params.push(to);
     }
-    const byRate = db
+    const byRate = (await db
       .prepare(
         `SELECT ii.gst_rate as gstRate,
                 COALESCE(SUM(ii.taxable_value), 0) as taxableValue,
@@ -125,9 +125,9 @@ reportsRouter.get(
          FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
          WHERE ${clauses.join(' AND ')} GROUP BY ii.gst_rate ORDER BY ii.gst_rate`
       )
-      .all(...params);
+      .all(...params)) as any[];
 
-    const b2bVsB2c = db
+    const b2bVsB2c = (await db
       .prepare(
         `SELECT CASE WHEN c.gstin IS NOT NULL AND c.gstin != '' THEN 'B2B' ELSE 'B2C' END as segment,
                 COUNT(DISTINCT i.id) as invoiceCount,
@@ -135,7 +135,7 @@ reportsRouter.get(
          FROM invoices i JOIN customers c ON c.id = i.customer_id
          WHERE ${clauses.join(' AND ')} GROUP BY segment`
       )
-      .all(...params);
+      .all(...params)) as any[];
 
     res.json({ byRate, b2bVsB2c });
   })
@@ -155,7 +155,7 @@ reportsRouter.get(
       clauses.push('i.invoice_date <= ?');
       params.push(to);
     }
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT COALESCE(NULLIF(ii.hsn_sac_code, ''), 'N/A') as hsnSacCode, ii.unit,
                 COALESCE(SUM(ii.qty), 0) as totalQty,
@@ -167,7 +167,7 @@ reportsRouter.get(
          FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
          WHERE ${clauses.join(' AND ')} GROUP BY hsnSacCode, ii.unit ORDER BY total DESC`
       )
-      .all(...params);
+      .all(...params)) as any[];
     res.json(rows);
   })
 );
@@ -175,14 +175,14 @@ reportsRouter.get(
 reportsRouter.get(
   '/aging',
   asyncHandler(async (req, res) => {
-    const rows = db
+    const rows = (await db
       .prepare(
         `SELECT i.id, i.invoice_number as invoiceNumber, i.invoice_date as invoiceDate, i.due_date as dueDate,
                 c.id as customerId, c.name as customerName, (i.grand_total - i.amount_paid) as balanceDue
          FROM invoices i JOIN customers c ON c.id = i.customer_id
          WHERE i.company_id = ? AND i.status NOT IN ('cancelled', 'draft', 'paid')`
       )
-      .all(req.companyId) as any[];
+      .all(req.companyId)) as any[];
 
     const today = new Date();
     const buckets: Record<string, { customerId: string; customerName: string; current: number; d30: number; d60: number; d90: number; over90: number; total: number }> = {};

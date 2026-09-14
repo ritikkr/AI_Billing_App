@@ -46,6 +46,8 @@ const options = {
             stateCode: { type: 'string' },
             email: { type: 'string', nullable: true },
             phone: { type: 'string', nullable: true },
+            logoUrl: { type: 'string', nullable: true },
+            signatureUrl: { type: 'string', nullable: true },
           },
         },
         Customer: {

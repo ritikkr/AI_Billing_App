@@ -1,0 +1,34 @@
+# Render blueprint for the BillGST backend (free tier).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Uses Turso/libSQL for the database (free tier). Set TURSO_DATABASE_URL and
+# TURSO_AUTH_TOKEN after creating the database:
+#   turso db create billgst
+#   turso db tokens create billgst
+services:
+  - type: web
+    name: billgst-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: TURSO_DATABASE_URL
+        sync: false
+        value: https://your-database-name-org.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      # Fallback local DB (only used if TURSO_* are unset) — lives on the
+      # ephemeral Render disk and will be wiped on redeploy, so prefer Turso.
+      - key: DATA_DIR
+        value: /tmp/data
+      - key: DB_PATH
+        value: /tmp/data/billing.db

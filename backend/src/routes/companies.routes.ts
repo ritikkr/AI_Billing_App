@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import { db } from '../db/connection.js';
 import { newId } from '../utils/id.js';
 import { asyncHandler, ApiError } from '../utils/asyncHandler.js';
@@ -38,8 +39,23 @@ const companySchema = z.object({
   debitNotePrefix: z.string().optional(),
   financialYearStartMonth: z.number().int().min(1).max(12).optional(),
   logoUrl: z.string().optional().nullable(),
+  signatureUrl: z.string().optional().nullable(),
   termsAndConditions: z.string().optional().nullable(),
 });
+
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+});
+
+function imageToDataUri(file: Express.Multer.File) {
+  if (!file.mimetype.startsWith('image/')) {
+    throw new ApiError(400, 'Only image files (e.g. PNG, JPG) are allowed');
+  }
+  return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+}
 
 function rowToCompany(row: any) {
   if (!row) return row;
@@ -65,6 +81,7 @@ function rowToCompany(row: any) {
     debitNotePrefix: row.debit_note_prefix,
     financialYearStartMonth: row.financial_year_start_month,
     logoUrl: row.logo_url,
+    signatureUrl: row.signature_url,
     termsAndConditions: row.terms_and_conditions,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -101,13 +118,13 @@ companiesRouter.get(
    *         description: Unauthorized
    */
   asyncHandler(async (req, res) => {
-    const rows = db
+    const rows = await db
       .prepare(
         `SELECT c.*, ucr.role as my_role FROM companies c
          JOIN user_company_roles ucr ON ucr.company_id = c.id
          WHERE ucr.user_id = ? ORDER BY c.name`
       )
-      .all(req.user!.id) as any[];
+      .all(req.user!.id);
     res.json(rows.map((r) => ({ ...rowToCompany(r), myRole: r.my_role })));
   })
 );
@@ -121,13 +138,13 @@ companiesRouter.post(
       if (!v.valid) throw new ApiError(400, `Invalid GSTIN: ${v.reason}`);
     }
     const id = newId();
-    db.prepare(
+    await db.prepare(
       `INSERT INTO companies (
         id, name, gstin, pan, address_line1, address_line2, city, state, state_code, pincode,
         phone, email, bank_name, bank_account_no, bank_ifsc, bank_branch,
         invoice_prefix, credit_note_prefix, debit_note_prefix, financial_year_start_month,
-        logo_url, terms_and_conditions, created_by
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        logo_url, signature_url, terms_and_conditions, created_by
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       body.name,
@@ -150,15 +167,16 @@ companiesRouter.post(
       body.debitNotePrefix || 'DN',
       body.financialYearStartMonth || 4,
       body.logoUrl || null,
+      body.signatureUrl || null,
       body.termsAndConditions || null,
       req.user!.id
     );
-    db.prepare(`INSERT INTO user_company_roles (id, user_id, company_id, role) VALUES (?, ?, ?, 'admin')`).run(
+    await db.prepare(`INSERT INTO user_company_roles (id, user_id, company_id, role) VALUES (?, ?, ?, 'admin')`).run(
       newId(),
       req.user!.id,
       id
     );
-    const row = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(id);
+    const row = await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(id);
     res.status(201).json({ ...rowToCompany(row), myRole: 'admin' });
   })
 );
@@ -167,7 +185,7 @@ companiesRouter.get(
   '/:companyId',
   requireCompany,
   asyncHandler(async (req, res) => {
-    const row = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId);
+    const row = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
     res.json({ ...rowToCompany(row), myRole: req.companyRole });
   })
 );
@@ -182,7 +200,7 @@ companiesRouter.patch(
       const v = validateGSTIN(body.gstin);
       if (!v.valid) throw new ApiError(400, `Invalid GSTIN: ${v.reason}`);
     }
-    const current = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId) as any;
+    const current = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
     if (!current) throw new ApiError(404, 'Company not found');
 
     const merged = {
@@ -206,24 +224,73 @@ companiesRouter.patch(
       debit_note_prefix: body.debitNotePrefix ?? current.debit_note_prefix,
       financial_year_start_month: body.financialYearStartMonth ?? current.financial_year_start_month,
       logo_url: body.logoUrl ?? current.logo_url,
+      signature_url: body.signatureUrl ?? current.signature_url,
       terms_and_conditions: body.termsAndConditions ?? current.terms_and_conditions,
     };
 
-    db.prepare(
+    await db.prepare(
       `UPDATE companies SET name=?, gstin=?, pan=?, address_line1=?, address_line2=?, city=?, state=?, state_code=?,
        pincode=?, phone=?, email=?, bank_name=?, bank_account_no=?, bank_ifsc=?, bank_branch=?,
        invoice_prefix=?, credit_note_prefix=?, debit_note_prefix=?, financial_year_start_month=?,
-       logo_url=?, terms_and_conditions=?, updated_at=datetime('now') WHERE id=?`
+       logo_url=?, signature_url=?, terms_and_conditions=?, updated_at=datetime('now') WHERE id=?`
     ).run(
       merged.name, merged.gstin, merged.pan, merged.address_line1, merged.address_line2, merged.city,
       merged.state, merged.state_code, merged.pincode, merged.phone, merged.email, merged.bank_name,
       merged.bank_account_no, merged.bank_ifsc, merged.bank_branch, merged.invoice_prefix,
       merged.credit_note_prefix, merged.debit_note_prefix, merged.financial_year_start_month,
-      merged.logo_url, merged.terms_and_conditions, req.companyId
+      merged.logo_url, merged.signature_url, merged.terms_and_conditions, req.companyId
     );
 
-    const row = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId);
+    const row = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
     res.json({ ...rowToCompany(row), myRole: req.companyRole });
+  })
+);
+
+// ---- Company branding (logo & signature) uploads ----
+
+companiesRouter.post(
+  '/:companyId/logo',
+  requireCompany,
+  requireRole('admin'),
+  imageUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, 'No file uploaded');
+    const dataUri = imageToDataUri(req.file);
+    await db.prepare(`UPDATE companies SET logo_url = ?, updated_at = datetime('now') WHERE id = ?`).run(dataUri, req.companyId);
+    res.json({ logoUrl: dataUri });
+  })
+);
+
+companiesRouter.delete(
+  '/:companyId/logo',
+  requireCompany,
+  requireRole('admin'),
+  asyncHandler(async (req, res) => {
+    await db.prepare(`UPDATE companies SET logo_url = NULL, updated_at = datetime('now') WHERE id = ?`).run(req.companyId);
+    res.json({ logoUrl: null });
+  })
+);
+
+companiesRouter.post(
+  '/:companyId/signature',
+  requireCompany,
+  requireRole('admin'),
+  imageUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, 'No file uploaded');
+    const dataUri = imageToDataUri(req.file);
+    await db.prepare(`UPDATE companies SET signature_url = ?, updated_at = datetime('now') WHERE id = ?`).run(dataUri, req.companyId);
+    res.json({ signatureUrl: dataUri });
+  })
+);
+
+companiesRouter.delete(
+  '/:companyId/signature',
+  requireCompany,
+  requireRole('admin'),
+  asyncHandler(async (req, res) => {
+    await db.prepare(`UPDATE companies SET signature_url = NULL, updated_at = datetime('now') WHERE id = ?`).run(req.companyId);
+    res.json({ signatureUrl: null });
   })
 );
 
@@ -233,7 +300,7 @@ companiesRouter.get(
   '/:companyId/users',
   requireCompany,
   asyncHandler(async (req, res) => {
-    const rows = db
+    const rows = await db
       .prepare(
         `SELECT u.id, u.name, u.email, ucr.role FROM user_company_roles ucr
          JOIN users u ON u.id = ucr.user_id WHERE ucr.company_id = ? ORDER BY u.name`
@@ -256,7 +323,7 @@ companiesRouter.post(
   requireRole('admin'),
   asyncHandler(async (req, res) => {
     const body = addUserSchema.parse(req.body);
-    let user = db.prepare(`SELECT * FROM users WHERE email = ?`).get(body.email.toLowerCase()) as any;
+    let user = (await db.prepare(`SELECT * FROM users WHERE email = ?`).get(body.email.toLowerCase())) as any;
 
     if (!user) {
       if (!body.name || !body.password) {
@@ -264,7 +331,7 @@ companiesRouter.post(
       }
       const id = newId();
       const passwordHash = await hashPassword(body.password);
-      db.prepare(`INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)`).run(
+      await db.prepare(`INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)`).run(
         id,
         body.name,
         body.email.toLowerCase(),
@@ -273,12 +340,12 @@ companiesRouter.post(
       user = { id, name: body.name, email: body.email.toLowerCase() };
     }
 
-    const existingMembership = db
+    const existingMembership = await db
       .prepare(`SELECT id FROM user_company_roles WHERE user_id = ? AND company_id = ?`)
       .get(user.id, req.companyId);
     if (existingMembership) throw new ApiError(409, 'This user already has access to the company');
 
-    db.prepare(`INSERT INTO user_company_roles (id, user_id, company_id, role) VALUES (?, ?, ?, ?)`).run(
+    await db.prepare(`INSERT INTO user_company_roles (id, user_id, company_id, role) VALUES (?, ?, ?, ?)`).run(
       newId(),
       user.id,
       req.companyId,
@@ -301,19 +368,19 @@ companiesRouter.patch(
       throw new ApiError(400, 'An admin cannot demote or remove itself');
     }
 
-    const membership = db
+    const membership = (await db
       .prepare(`SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ?`)
-      .get(req.params.userId, req.companyId) as any;
+      .get(req.params.userId, req.companyId)) as any;
     if (!membership) throw new ApiError(404, 'Membership not found');
 
     if (membership.role === 'admin' && role !== 'admin') {
-      const adminCount = db
+      const adminCount = (await db
         .prepare(`SELECT COUNT(*) as n FROM user_company_roles WHERE company_id = ? AND role = 'admin'`)
-        .get(req.companyId) as any;
+        .get(req.companyId)) as any;
       if (adminCount.n <= 1) throw new ApiError(400, 'Cannot demote the last remaining admin');
     }
 
-    db.prepare(`UPDATE user_company_roles SET role = ? WHERE user_id = ? AND company_id = ?`).run(
+    await db.prepare(`UPDATE user_company_roles SET role = ? WHERE user_id = ? AND company_id = ?`).run(
       role,
       req.params.userId,
       req.companyId
@@ -331,19 +398,19 @@ companiesRouter.delete(
       throw new ApiError(400, 'An admin cannot remove itself');
     }
 
-    const membership = db
+    const membership = (await db
       .prepare(`SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ?`)
-      .get(req.params.userId, req.companyId) as any;
+      .get(req.params.userId, req.companyId)) as any;
     if (!membership) throw new ApiError(404, 'Membership not found');
 
     if (membership.role === 'admin') {
-      const adminCount = db
+      const adminCount = (await db
         .prepare(`SELECT COUNT(*) as n FROM user_company_roles WHERE company_id = ? AND role = 'admin'`)
-        .get(req.companyId) as any;
+        .get(req.companyId)) as any;
       if (adminCount.n <= 1) throw new ApiError(400, 'Cannot remove the last remaining admin');
     }
 
-    db.prepare(`DELETE FROM user_company_roles WHERE user_id = ? AND company_id = ?`).run(req.params.userId, req.companyId);
+    await db.prepare(`DELETE FROM user_company_roles WHERE user_id = ? AND company_id = ?`).run(req.params.userId, req.companyId);
     res.status(204).send();
   })
 );

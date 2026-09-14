@@ -34,6 +34,7 @@ export interface Company {
   debitNotePrefix: string;
   financialYearStartMonth: number;
   logoUrl: string | null;
+  signatureUrl: string | null;
   termsAndConditions: string | null;
   myRole?: Role;
   createdAt?: string;

@@ -42,3 +42,31 @@ export async function updateCompanyUserRole(companyId: string, userId: string, r
 export async function removeCompanyUser(companyId: string, userId: string) {
   await apiClient.delete(`/companies/${companyId}/users/${userId}`);
 }
+
+export async function uploadCompanyLogo(companyId: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<{ logoUrl: string }>(`/companies/${companyId}/logo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function removeCompanyLogo(companyId: string) {
+  const { data } = await apiClient.delete<{ logoUrl: null }>(`/companies/${companyId}/logo`);
+  return data;
+}
+
+export async function uploadCompanySignature(companyId: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<{ signatureUrl: string }>(`/companies/${companyId}/signature`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function removeCompanySignature(companyId: string) {
+  const { data } = await apiClient.delete<{ signatureUrl: null }>(`/companies/${companyId}/signature`);
+  return data;
+}

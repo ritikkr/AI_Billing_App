@@ -26,12 +26,12 @@ authRouter.post(
   '/register',
   asyncHandler(async (req, res) => {
     const { name, email, password } = registerSchema.parse(req.body);
-    const existing = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email.toLowerCase());
+    const existing = await db.prepare(`SELECT id FROM users WHERE email = ?`).get(email.toLowerCase());
     if (existing) throw new ApiError(409, 'An account with this email already exists');
 
     const id = newId();
     const passwordHash = await hashPassword(password);
-    db.prepare(`INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)`).run(
+    await db.prepare(`INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)`).run(
       id,
       name,
       email.toLowerCase(),
@@ -52,7 +52,7 @@ authRouter.post(
   '/login',
   asyncHandler(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
-    const user = db.prepare(`SELECT * FROM users WHERE email = ?`).get(email.toLowerCase()) as any;
+    const user = (await db.prepare(`SELECT * FROM users WHERE email = ?`).get(email.toLowerCase())) as any;
     if (!user || !user.is_active) throw new ApiError(401, 'Invalid email or password');
 
     const ok = await verifyPassword(password, user.password_hash);
@@ -67,7 +67,7 @@ authRouter.get(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const memberships = db
+    const memberships = await db
       .prepare(
         `SELECT ucr.company_id as companyId, ucr.role, c.name as companyName
          FROM user_company_roles ucr JOIN companies c ON c.id = ucr.company_id

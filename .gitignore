@@ -1,1 +1,16 @@
 .DS_Store
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Local database + env secrets
+backend/data/
+backend/.env
+frontend/.env
+frontend/.env.local
+.env
+.env.*
+!.env.example

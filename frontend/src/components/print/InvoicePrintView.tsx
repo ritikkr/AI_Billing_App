@@ -48,6 +48,7 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
     <div className="px-8 pb-8 pt-10 text-[13px] leading-snug text-slate-800">
       <div className="flex items-start justify-between">
         <div className="max-w-[55%]">
+          {company.logo_url && <img src={company.logo_url} alt="Company logo" className="mb-2 h-12 w-auto max-w-[150px] rounded object-contain" />}
           <h1 className="text-xl font-bold text-slate-900">{company.name}</h1>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">{companyAddress(company)}</p>
           {company.gstin && <p className="text-xs text-slate-500">GSTIN: {company.gstin}</p>}
@@ -116,7 +117,8 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
       <div className="mt-10 text-right">
         <p className="text-xs text-slate-500">For {company.name}</p>
-        <p className="mt-8 text-xs text-slate-500">Authorized Signatory</p>
+        {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="ml-auto mt-3 h-11 w-auto max-w-[140px] object-contain" />}
+        <p className={`text-xs text-slate-500 ${company.signature_url ? 'mt-2' : 'mt-8'}`}>Authorized Signatory</p>
       </div>
     </div>
   );
@@ -130,6 +132,7 @@ function ModernInvoice({ invoice }: { invoice: InvoiceDetail }) {
       <div className="rounded-t-xl bg-indigo-700 px-8 py-6 text-white">
         <div className="flex items-start justify-between">
           <div>
+            {company.logo_url && <img src={company.logo_url} alt="Company logo" className="mb-2 h-12 w-auto max-w-[150px] rounded object-contain" />}
             <h1 className="text-xl font-bold">{company.name}</h1>
             <p className="mt-1 text-xs leading-relaxed text-indigo-100">{companyAddress(company)}</p>
             {company.gstin && <p className="text-xs text-indigo-100">GSTIN: {company.gstin}</p>}
@@ -198,7 +201,8 @@ function ModernInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
         <div className="mt-10 text-right">
           <p className="text-xs text-slate-500">For {company.name}</p>
-          <p className="mt-8 text-xs text-slate-500">Authorized Signatory</p>
+          {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="ml-auto mt-3 h-11 w-auto max-w-[140px] object-contain" />}
+          <p className={`text-xs text-slate-500 ${company.signature_url ? 'mt-2' : 'mt-8'}`}>Authorized Signatory</p>
         </div>
       </div>
     </div>
@@ -211,6 +215,7 @@ function MinimalInvoice({ invoice }: { invoice: InvoiceDetail }) {
   return (
     <div className="px-10 pb-8 pt-12 text-[13px] leading-snug text-slate-900">
       <div className="text-center">
+        {company.logo_url && <img src={company.logo_url} alt="Company logo" className="mx-auto mb-2 h-12 w-auto max-w-[160px] rounded object-contain" />}
         <h1 className="text-xl font-bold tracking-tight uppercase">{company.name}</h1>
         <p className="mt-1 text-xs text-slate-500">{companyAddress(company)}</p>
         {company.gstin && <p className="text-xs text-slate-500">GSTIN: {company.gstin}</p>}
@@ -268,7 +273,8 @@ function MinimalInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
       <div className="mt-12 text-center">
         <p className="text-xs text-slate-500">For {company.name}</p>
-        <p className="mt-10 text-xs text-slate-500">Authorized Signatory</p>
+        {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="mx-auto mt-3 h-11 w-auto max-w-[140px] object-contain" />}
+        <p className={`text-xs text-slate-500 ${company.signature_url ? 'mt-2' : 'mt-10'}`}>Authorized Signatory</p>
       </div>
     </div>
   );
@@ -289,6 +295,7 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
       <div className="mt-2 border border-slate-500">
         <div className="flex">
           <div className="min-w-0 flex-1 border-r border-slate-500 px-3 py-2">
+            {company.logo_url && <img src={company.logo_url} alt="Company logo" className="mb-1 h-10 w-auto max-w-[150px] rounded object-contain" />}
             <h1 className="text-base font-bold">{company.name}</h1>
             <p className="mt-0.5 text-xs leading-relaxed">{companyAddress(company)}</p>
             <p className="text-xs">Phone no.: {company.phone}</p>
@@ -505,7 +512,8 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
         </div>
         <div className="px-3 py-2 text-right text-xs">
           <p>For : {company.name}</p>
-          <p className="mt-10 font-bold">Authorized Signatory</p>
+          {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="ml-auto mt-2 h-9 w-auto max-w-[130px] object-contain" />}
+          <p className={`font-bold ${company.signature_url ? 'mt-1' : 'mt-10'}`}>Authorized Signatory</p>
         </div>
       </div>
     </div>
