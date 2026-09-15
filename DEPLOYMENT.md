@@ -45,6 +45,7 @@ Push the repo to GitHub/GitLab, then:
 4. In the **Environment** section, set:
    - `TURSO_DATABASE_URL` — the `libsql://…` URL from step 1.
    - `TURSO_AUTH_TOKEN` — the token from step 1.
+   - `BREVO_SMTP_USER` + `BREVO_SMTP_PASS` — Brevo SMTP login/key (needed for OTP emails; without them OTPs fall back to the server console).
 5. Click **Apply**. Render builds and starts the service.
 6. Copy the public URL (e.g. `https://billgst-api-xyz.onrender.com`).
 
@@ -63,6 +64,8 @@ Push the repo to GitHub/GitLab, then:
    - `JWT_EXPIRES_IN` = `7d`
    - `TURSO_DATABASE_URL` = *(from step 1)*
    - `TURSO_AUTH_TOKEN` = *(from step 1)*
+   - `BREVO_SMTP_USER` + `BREVO_SMTP_PASS` = *(Brevo SMTP login/key for OTP emails)*
+   - `BREVO_FROM_EMAIL` = `billing@yourdomain.com` *(optional)*
 4. Create the service. It will build, run migrations on first boot, and listen on `/api/health`.
 
 ---

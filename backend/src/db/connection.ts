@@ -96,6 +96,12 @@ export async function runMigrations(): Promise<void> {
   // Foreign keys are on by default in Turso; enforce them too in local-file mode.
   await client.execute('PRAGMA foreign_keys = ON');
 
+  // Add email_verified column to users for existing databases (existing accounts are trusted).
+  const userCols = (await db.prepare(`PRAGMA table_info(users)`).all()) as Array<{ name: string }>;
+  if (!new Set(userCols.map((c) => c.name)).has('email_verified')) {
+    await db.prepare(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`).run();
+  }
+
   // Add receivable/payable balance columns to customers for existing databases.
   const cols = (await db.prepare(`PRAGMA table_info(customers)`).all()) as Array<{ name: string }>;
   const existing = new Set(cols.map((c) => c.name));

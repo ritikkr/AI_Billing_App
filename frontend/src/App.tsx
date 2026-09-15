@@ -3,6 +3,7 @@ import { ProtectedRoute, RequireCompany } from './components/ProtectedRoute';
 import { AppShell } from './components/layout/AppShell';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ForgotPassword from './pages/auth/ForgotPassword';
 import CreateCompany from './pages/CreateCompany';
 import Dashboard from './pages/Dashboard';
 import CustomersList from './pages/customers/CustomersList';
@@ -24,6 +25,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/companies/new" element={<CreateCompany />} />

@@ -7,8 +7,21 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
+  email_verified INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS email_otps (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  otp TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'register' CHECK (purpose IN ('register', 'login', 'reset')),
+  expires_at TEXT NOT NULL,
+  verified INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
 
 CREATE TABLE IF NOT EXISTS companies (
   id TEXT PRIMARY KEY,

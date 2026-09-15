@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { fetchMe, login as apiLogin, register as apiRegister } from '../api/auth';
+import { fetchMe, login as apiLogin, loginWithOtp as apiLoginWithOtp, register as apiRegister } from '../api/auth';
 import type { Membership, User } from '../types';
 
 interface AuthContextValue {
@@ -7,7 +7,8 @@ interface AuthContextValue {
   memberships: Membership[];
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  loginWithOtp: (email: string, verificationToken: string) => Promise<void>;
+  register: (name: string, email: string, password: string, verificationToken: string) => Promise<void>;
   logout: () => void;
   refreshMemberships: () => Promise<void>;
 }
@@ -50,8 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMemberships(me.memberships);
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    const data = await apiRegister(name, email, password);
+  const loginWithOtp = useCallback(async (email: string, verificationToken: string) => {
+    const data = await apiLoginWithOtp(email, verificationToken);
+    localStorage.setItem('token', data.token);
+    setUser(data.user);
+    const me = await fetchMe();
+    setMemberships(me.memberships);
+  }, []);
+
+  const register = useCallback(async (name: string, email: string, password: string, verificationToken: string) => {
+    const data = await apiRegister(name, email, password, verificationToken);
     localStorage.setItem('token', data.token);
     setUser(data.user);
     setMemberships([]);
@@ -66,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, memberships, loading, login, register, logout, refreshMemberships: loadMe }),
-    [user, memberships, loading, login, register, logout, loadMe]
+    () => ({ user, memberships, loading, login, loginWithOtp, register, logout, refreshMemberships: loadMe }),
+    [user, memberships, loading, login, loginWithOtp, register, logout, loadMe]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

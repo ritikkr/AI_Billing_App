@@ -25,6 +25,16 @@ services:
         value: https://your-database-name-org.turso.io
       - key: TURSO_AUTH_TOKEN
         value: PASTE_YOUR_TURSO_TOKEN_HERE  # Replace via Render dashboard after blueprint apply
+      # Brevo SMTP for email OTPs (signup verification, OTP login, password reset).
+      # Required for email delivery — without these, codes are only logged to the server console.
+      - key: BREVO_SMTP_USER
+        value: PASTE_BREVO_SMTP_LOGIN_HERE  # Replace via Render dashboard after blueprint apply
+      - key: BREVO_SMTP_PASS
+        value: PASTE_BREVO_SMTP_KEY_HERE   # Replace via Render dashboard after blueprint apply
+      - key: BREVO_FROM_NAME
+        value: Billing App
+      - key: BREVO_FROM_EMAIL
+        value: support@yourdomain.com
       # Fallback local DB (only used if TURSO_* are unset) — lives on the
       # ephemeral Render disk and will be wiped on redeploy, so prefer Turso.
       - key: DATA_DIR
