@@ -1,4 +1,5 @@
 import { createClient, type InStatement, type InValue, type ResultSet } from '@libsql/client';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -143,5 +144,58 @@ export async function runMigrations(): Promise<void> {
         .run();
       await tx.prepare(`DROP TABLE company_preferences_old`).run();
     });
+  }
+
+  // Add quotation_prefix and certificate_prefix columns to companies for existing databases.
+  if (!companyExisting.has('quotation_prefix')) {
+    await db.prepare(`ALTER TABLE companies ADD COLUMN quotation_prefix TEXT NOT NULL DEFAULT 'EST'`).run();
+  }
+  if (!companyExisting.has('certificate_prefix')) {
+    await db.prepare(`ALTER TABLE companies ADD COLUMN certificate_prefix TEXT NOT NULL DEFAULT 'CERT'`).run();
+  }
+
+  // Rebuild invoice_counters when it predates 'quotation'/'certificate' series.
+  const counterDef = (await db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'invoice_counters'`)
+    .get()) as { sql: string } | undefined;
+  if (counterDef && !counterDef.sql.includes('quotation')) {
+    await db.transaction(async (tx) => {
+      await tx.prepare(`ALTER TABLE invoice_counters RENAME TO invoice_counters_old`).run();
+      await tx.prepare(`CREATE TABLE invoice_counters (
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        financial_year TEXT NOT NULL,
+        series TEXT NOT NULL CHECK (series IN ('invoice', 'credit_note', 'debit_note', 'quotation', 'certificate')),
+        last_number INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (company_id, financial_year, series)
+      )`).run();
+      await tx
+        .prepare(
+          `INSERT INTO invoice_counters (company_id, financial_year, series, last_number)
+           SELECT company_id, financial_year, series, last_number FROM invoice_counters_old`
+        )
+        .run();
+      await tx.prepare(`DROP TABLE invoice_counters_old`).run();
+    });
+  }
+
+  // Seed a default certificate template if none exist.
+  const templateCount = (await db.prepare(`SELECT COUNT(*) as cnt FROM certificate_templates`).get()) as { cnt: number };
+  if (templateCount.cnt === 0) {
+    const defaultBody = `This is to certify that {{service_type}} service was successfully carried out at {{outlet_name}}, {{outlet_address}} on {{service_date}} by {{company_name}}.
+
+The service was performed in accordance with the agreed standards and there are no issues or concerns regarding the quality of service provided.
+
+This certificate is valid from {{valid_from}} to {{valid_until}}.
+
+Authorized Signatory: _______________
+Company: {{company_name}}
+Date: {{certificate_date}}
+Certificate No: {{certificate_number}}`;
+    await db
+      .prepare(
+        `INSERT INTO certificate_templates (id, company_id, name, subject, body, is_default)
+         VALUES (?, NULL, ?, ?, ?, 1)`
+      )
+      .run(crypto.randomUUID(), 'Default Service Certificate', 'Service Completion Certificate', defaultBody);
   }
 }

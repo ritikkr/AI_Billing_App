@@ -16,6 +16,9 @@ import { creditNotesRouter } from './routes/creditNotes.routes.js';
 import { reportsRouter } from './routes/reports.routes.js';
 import { pdfImportRouter } from './routes/pdfImport.routes.js';
 import { preferencesRouter } from './routes/preferences.routes.js';
+import { certificateTemplatesRouter } from './routes/certificateTemplates.routes.js';
+import { certificatesRouter } from './routes/certificates.routes.js';
+import { quotationsRouter } from './routes/quotations.routes.js';
 import { INDIAN_STATES, GST_RATE_SLABS, UNITS, PAYMENT_MODES } from './services/gst.constants.js';
 
 await runMigrations();
@@ -45,6 +48,9 @@ app.use('/api/companies/:companyId/credit-notes', requireAuth, requireCompany, c
 app.use('/api/companies/:companyId/reports', requireAuth, requireCompany, reportsRouter);
 app.use('/api/companies/:companyId/pdf-import', requireAuth, requireCompany, pdfImportRouter);
 app.use('/api/companies/:companyId/preferences', requireAuth, requireCompany, preferencesRouter);
+app.use('/api/companies/:companyId/certificate-templates', requireAuth, requireCompany, certificateTemplatesRouter);
+app.use('/api/companies/:companyId/certificates', requireAuth, requireCompany, certificatesRouter);
+app.use('/api/companies/:companyId/quotations', requireAuth, requireCompany, quotationsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

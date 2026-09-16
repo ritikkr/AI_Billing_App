@@ -41,10 +41,11 @@ export function SearchableSelect({
   const [highlighted, setHighlighted] = useState(0);
 
   const selected = options.find((o) => o.value === value);
-  // Search text lives in `query` while open. Once closed, the resolved value is
-  // what should be visible (free-text keeps the raw string; otherwise the label
-  // is shown through the placeholder).
-  const inputValue = open ? query : freeText ? value : '';
+  // When closed, free-text mode shows the resolved label if the selected value
+  // matches an option (otherwise the raw typed string). Non free-text shows
+  // nothing and relies on a placeholder label.
+  const displayValue = freeText ? (selected ? selected.label : value) : '';
+  const inputValue = open ? query : displayValue;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,7 +110,7 @@ export function SearchableSelect({
             placeholder={!freeText && selected && !open ? selected.label : placeholder}
             value={inputValue}
             onFocus={() => {
-              setQuery(freeText ? value : '');
+              setQuery(freeText ? (selected ? selected.label : value) : '');
               setOpen(true);
               setHighlighted(0);
             }}

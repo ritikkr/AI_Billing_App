@@ -32,6 +32,8 @@ export interface Company {
   invoicePrefix: string;
   creditNotePrefix: string;
   debitNotePrefix: string;
+  quotationPrefix: string;
+  certificatePrefix: string;
   financialYearStartMonth: number;
   logoUrl: string | null;
   signatureUrl: string | null;
@@ -238,4 +240,106 @@ export interface Preferences {
   printDesign: DocumentDesign;
   downloadDesign: DocumentDesign;
   updatedAt?: string;
+}
+
+export interface CertificateTemplate {
+  id: string;
+  companyId: string | null;
+  name: string;
+  subject: string;
+  body: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CertificateStatus = 'draft' | 'issued' | 'cancelled';
+
+export interface Certificate {
+  id: string;
+  companyId: string;
+  certificateNumber: string;
+  financialYear: string;
+  templateId: string | null;
+  certificateDate: string;
+  customerId: string | null;
+  outletName: string | null;
+  outletAddress: string | null;
+  serviceDate: string | null;
+  serviceType: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  customFields: Record<string, string> | null;
+  notes: string | null;
+  status: CertificateStatus;
+  issuedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customerName?: string;
+  templateName?: string;
+}
+
+export interface CertificateDetail extends Certificate {
+  customer: Customer | null;
+  company: any;
+  template: { id: string; name: string; subject: string; body: string; isDefault: boolean } | null;
+}
+
+export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
+
+export interface Quotation {
+  id: string;
+  companyId: string;
+  quotationNumber: string;
+  financialYear: string;
+  quotationDate: string;
+  validUntil: string | null;
+  customerId: string;
+  customerName?: string;
+  placeOfSupplyStateCode: string;
+  isInterstate: boolean;
+  subtotal: number;
+  totalDiscount: number;
+  taxableValue: number;
+  totalCgst: number;
+  totalSgst: number;
+  totalIgst: number;
+  roundOff: number;
+  grandTotal: number;
+  status: QuotationStatus;
+  notes: string | null;
+  terms: string | null;
+  convertedInvoiceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuotationDetail extends Quotation {
+  lineItems: InvoiceLineItem[];
+  customer: any;
+  company: any;
+}
+
+export interface QuotationSummary {
+  counts: {
+    total: number;
+    draft: number;
+    sent: number;
+    accepted: number;
+    rejected: number;
+    expired: number;
+    converted: number;
+  };
+  totalQuoted: number;
+  totalConverted: number;
+}
+
+export interface NextDocumentNumber {
+  quotationNumber?: string;
+  certificateNumber?: string;
+  invoiceNumber?: string;
+  financialYear: string;
+  quotationDate?: string;
+  certificateDate?: string;
+  invoiceDate?: string;
 }

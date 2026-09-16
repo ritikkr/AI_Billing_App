@@ -37,6 +37,10 @@ const STATUS_LABELS: Record<string, string> = {
   overdue: 'Overdue',
   cancelled: 'Cancelled',
   issued: 'Issued',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  expired: 'Expired',
+  converted: 'Converted',
 };
 
 export function statusLabel(status: string): string {

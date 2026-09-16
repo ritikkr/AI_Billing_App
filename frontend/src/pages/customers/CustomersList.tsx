@@ -16,6 +16,7 @@ import { formatCurrency } from '../../utils/format';
 import { exportCsv } from '../../utils/exportCsv';
 import { CustomerFormModal } from './CustomerFormModal';
 import { ImportCustomersModal } from './ImportCustomersModal';
+import { ImportPdfModal } from './ImportPdfModal';
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +29,7 @@ export default function CustomersList() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
@@ -130,6 +132,11 @@ export default function CustomersList() {
           {canEdit && (
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               Import
+            </Button>
+          )}
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setPdfImportOpen(true)}>
+              Import PDF
             </Button>
           )}
           {canEdit && <Button onClick={() => setModalOpen(true)}>+ New Customer</Button>}
@@ -235,6 +242,7 @@ export default function CustomersList() {
 
       <CustomerFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
       <ImportCustomersModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportPdfModal open={pdfImportOpen} onClose={() => setPdfImportOpen(false)} />
     </div>
   );
 }

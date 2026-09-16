@@ -15,6 +15,12 @@ import InvoiceDetail from './pages/invoices/InvoiceDetail';
 import CreditNotesList from './pages/creditnotes/CreditNotesList';
 import CreditNoteForm from './pages/creditnotes/CreditNoteForm';
 import CreditNoteDetail from './pages/creditnotes/CreditNoteDetail';
+import QuotationsList from './pages/quotations/QuotationsList';
+import QuotationForm from './pages/quotations/QuotationForm';
+import QuotationDetail from './pages/quotations/QuotationDetail';
+import CertificatesList from './pages/certificates/CertificatesList';
+import CertificateForm from './pages/certificates/CertificateForm';
+import CertificateDetail from './pages/certificates/CertificateDetail';
 import Reports from './pages/reports/Reports';
 import CompanySettings from './pages/settings/CompanySettings';
 import Profile from './pages/Profile';
@@ -41,6 +47,14 @@ export default function App() {
             <Route path="/invoices/new" element={<InvoiceForm />} />
             <Route path="/invoices/:id" element={<InvoiceDetail />} />
             <Route path="/invoices/:id/edit" element={<InvoiceForm />} />
+            <Route path="/quotations" element={<QuotationsList />} />
+            <Route path="/quotations/new" element={<QuotationForm />} />
+            <Route path="/quotations/:id" element={<QuotationDetail />} />
+            <Route path="/quotations/:id/edit" element={<QuotationForm />} />
+            <Route path="/certificates" element={<CertificatesList />} />
+            <Route path="/certificates/new" element={<CertificateForm />} />
+            <Route path="/certificates/:id" element={<CertificateDetail />} />
+            <Route path="/certificates/:id/edit" element={<CertificateForm />} />
             <Route path="/credit-notes" element={<CreditNotesList />} />
             <Route path="/credit-notes/new" element={<CreditNoteForm />} />
             <Route path="/credit-notes/:id" element={<CreditNoteDetail />} />

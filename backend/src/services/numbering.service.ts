@@ -1,12 +1,14 @@
 import { db, type DbLike } from '../db/connection.js';
 import { financialYearLabel } from './gst.service.js';
 
-type Series = 'invoice' | 'credit_note' | 'debit_note';
+type Series = 'invoice' | 'credit_note' | 'debit_note' | 'quotation' | 'certificate';
 
-const prefixColumn: Record<Series, 'invoice_prefix' | 'credit_note_prefix' | 'debit_note_prefix'> = {
+const prefixColumn: Record<Series, string> = {
   invoice: 'invoice_prefix',
   credit_note: 'credit_note_prefix',
   debit_note: 'debit_note_prefix',
+  quotation: 'quotation_prefix',
+  certificate: 'certificate_prefix',
 };
 
 /**
@@ -24,7 +26,7 @@ export async function nextDocumentNumber(
   tx: DbLike = db
 ): Promise<string> {
   const company = (await tx
-    .prepare(`SELECT financial_year_start_month, invoice_prefix, credit_note_prefix, debit_note_prefix FROM companies WHERE id = ?`)
+    .prepare(`SELECT financial_year_start_month, invoice_prefix, credit_note_prefix, debit_note_prefix, quotation_prefix, certificate_prefix FROM companies WHERE id = ?`)
     .get(companyId)) as any;
   if (!company) throw new Error('Company not found');
 

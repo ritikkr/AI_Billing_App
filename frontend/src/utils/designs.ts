@@ -16,3 +16,9 @@ export const DOCUMENT_DESIGNS: DesignMeta[] = [
 export function designLabel(value: DocumentDesign | undefined) {
   return DOCUMENT_DESIGNS.find((d) => d.value === value)?.label ?? 'Classic';
 }
+
+export const QUOTATION_DESIGNS: DesignMeta[] = [
+  { value: 'classic', label: 'Classic', description: 'Traditional quotation layout with a balanced two-column header.' },
+  { value: 'modern', label: 'Modern', description: 'Bold teal header band and an accent-callout grand total.' },
+  { value: 'minimal', label: 'Minimal', description: 'Clean, monochrome, lightweight layout with plenty of whitespace.' },
+];

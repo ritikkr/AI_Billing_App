@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS companies (
   invoice_prefix TEXT NOT NULL DEFAULT 'INV',
   credit_note_prefix TEXT NOT NULL DEFAULT 'CN',
   debit_note_prefix TEXT NOT NULL DEFAULT 'DN',
+  quotation_prefix TEXT NOT NULL DEFAULT 'EST',
+  certificate_prefix TEXT NOT NULL DEFAULT 'CERT',
   financial_year_start_month INTEGER NOT NULL DEFAULT 4,
   logo_url TEXT,
   signature_url TEXT,
@@ -234,3 +236,93 @@ CREATE TABLE IF NOT EXISTS credit_note_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_note_items_note ON credit_note_items(credit_note_id);
+
+CREATE TABLE IF NOT EXISTS certificate_templates (
+  id TEXT PRIMARY KEY,
+  company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS certificates (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  certificate_number TEXT NOT NULL,
+  financial_year TEXT NOT NULL,
+  template_id TEXT REFERENCES certificate_templates(id),
+  certificate_date TEXT NOT NULL,
+  customer_id TEXT REFERENCES customers(id),
+  outlet_name TEXT,
+  outlet_address TEXT,
+  service_date TEXT,
+  service_type TEXT,
+  valid_from TEXT,
+  valid_until TEXT,
+  custom_fields TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'issued', 'cancelled')),
+  issued_by TEXT,
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(company_id, certificate_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_certificates_company ON certificates(company_id);
+
+CREATE TABLE IF NOT EXISTS quotations (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  quotation_number TEXT NOT NULL,
+  financial_year TEXT NOT NULL,
+  quotation_date TEXT NOT NULL,
+  valid_until TEXT,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  place_of_supply_state_code TEXT NOT NULL,
+  is_interstate INTEGER NOT NULL DEFAULT 0,
+  subtotal REAL NOT NULL DEFAULT 0,
+  total_discount REAL NOT NULL DEFAULT 0,
+  taxable_value REAL NOT NULL DEFAULT 0,
+  total_cgst REAL NOT NULL DEFAULT 0,
+  total_sgst REAL NOT NULL DEFAULT 0,
+  total_igst REAL NOT NULL DEFAULT 0,
+  round_off REAL NOT NULL DEFAULT 0,
+  grand_total REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'accepted', 'rejected', 'expired', 'converted')),
+  notes TEXT,
+  terms TEXT,
+  converted_invoice_id TEXT REFERENCES invoices(id),
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(company_id, quotation_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotations_company ON quotations(company_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_customer ON quotations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_status ON quotations(status);
+
+CREATE TABLE IF NOT EXISTS quotation_items (
+  id TEXT PRIMARY KEY,
+  quotation_id TEXT NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
+  item_id TEXT REFERENCES items(id),
+  description TEXT NOT NULL,
+  hsn_sac_code TEXT,
+  qty REAL NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'NOS',
+  rate REAL NOT NULL DEFAULT 0,
+  discount_percent REAL NOT NULL DEFAULT 0,
+  taxable_value REAL NOT NULL DEFAULT 0,
+  gst_rate REAL NOT NULL DEFAULT 0,
+  cgst_amount REAL NOT NULL DEFAULT 0,
+  sgst_amount REAL NOT NULL DEFAULT 0,
+  igst_amount REAL NOT NULL DEFAULT 0,
+  line_total REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotation_items_quotation ON quotation_items(quotation_id);
