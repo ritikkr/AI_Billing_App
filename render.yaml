@@ -21,6 +21,11 @@ services:
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
+      # Public origin of this API. Controls the server URL Swagger "Try it out"
+      # calls. Set to the Render public HTTPS URL (e.g. https://billgst-api.onrender.com).
+      # If unset, the spec derives the URL from the incoming Host header.
+      - key: PUBLIC_API_URL
+        value: https://billgst-api.onrender.com  # Replace with your service URL after apply
       - key: TURSO_DATABASE_URL
         value: https://your-database-name-org.turso.io
       - key: TURSO_AUTH_TOKEN

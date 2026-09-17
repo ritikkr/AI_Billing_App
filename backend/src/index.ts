@@ -24,6 +24,7 @@ import { INDIAN_STATES, GST_RATE_SLABS, UNITS, PAYMENT_MODES } from './services/
 await runMigrations();
 
 const app = express();
+app.set('trust proxy', true); // honour X-Forwarded-Proto/Host from Render/nginx
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
@@ -41,6 +42,7 @@ app.use(
   '/api-docs',
   (req: express.Request, res: express.Response, next: express.NextFunction) => {
     (req as express.Request & { swaggerDoc?: unknown }).swaggerDoc = buildSwaggerSpec(resolveServerUrl(req));
+    res.set('Cache-Control', 'no-store'); // don't serve stale specs after redeploys
     next();
   },
   ...swaggerUi.serveFiles(swaggerSpec, {}),
