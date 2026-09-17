@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './swagger.js';
+import { swaggerSpec, buildSwaggerSpec } from './swagger.js';
 import { runMigrations } from './db/connection.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requireAuth, requireCompany } from './middleware/auth.js';
@@ -27,8 +27,25 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-// Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger UI — serve the spec with a server URL derived from the request host
+// so "Try it out" targets the deployed origin, not localhost.
+function resolveServerUrl(req: express.Request): string {
+  const override = process.env.PUBLIC_API_URL;
+  if (override) return override;
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
+app.use(
+  '/api-docs',
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    (req as express.Request & { swaggerDoc?: unknown }).swaggerDoc = buildSwaggerSpec(resolveServerUrl(req));
+    next();
+  },
+  ...swaggerUi.serveFiles(swaggerSpec, {}),
+  swaggerUi.setup(swaggerSpec)
+);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

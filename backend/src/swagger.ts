@@ -8,16 +8,6 @@ const options = {
       version: '1.0.0',
       description: 'REST API for the Billing App - Invoice, Credit Notes, and Payment Management System',
     },
-    servers: [
-      {
-        url: 'http://localhost:4000',
-        description: 'Development server',
-      },
-      {
-        url: 'https://api.billing-app.com',
-        description: 'Production server',
-      },
-    ],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -101,4 +91,25 @@ const options = {
   apis: ['./src/routes/*.ts'],
 };
 
-export const swaggerSpec = swaggerJsdoc(options);
+/**
+ * Builds the OpenAPI spec for a given server URL. The server is derived from
+ * the incoming request so Swagger "Try it out" calls the real deployed origin
+ * instead of a hardcoded localhost. Override with PUBLIC_API_URL if the API is
+ * behind a different public host than the request.
+ */
+export function buildSwaggerSpec(serverUrl: string) {
+  return swaggerJsdoc({
+    ...options,
+    definition: {
+      ...options.definition,
+      servers: [
+        {
+          url: serverUrl.replace(/\/$/, ''),
+          description: 'Current server',
+        },
+      ],
+    },
+  });
+}
+
+export const swaggerSpec = buildSwaggerSpec(process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 4000}`);
