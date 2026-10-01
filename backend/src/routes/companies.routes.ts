@@ -42,6 +42,7 @@ const companySchema = z.object({
   financialYearStartMonth: z.number().int().min(1).max(12).optional(),
   logoUrl: z.string().optional().nullable(),
   signatureUrl: z.string().optional().nullable(),
+  paymentQrUrl: z.string().optional().nullable(),
   termsAndConditions: z.string().optional().nullable(),
 });
 
@@ -86,6 +87,7 @@ function rowToCompany(row: any) {
     financialYearStartMonth: row.financial_year_start_month,
     logoUrl: row.logo_url,
     signatureUrl: row.signature_url,
+    paymentQrUrl: row.payment_qr_url,
     termsAndConditions: row.terms_and_conditions,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -147,8 +149,8 @@ companiesRouter.post(
         id, name, gstin, pan, address_line1, address_line2, city, state, state_code, pincode,
         phone, email, bank_name, bank_account_no, bank_ifsc, bank_branch,
         invoice_prefix, credit_note_prefix, debit_note_prefix, quotation_prefix, certificate_prefix, financial_year_start_month,
-        logo_url, signature_url, terms_and_conditions, created_by
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        logo_url, signature_url, payment_qr_url, terms_and_conditions, created_by
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       body.name,
@@ -174,6 +176,7 @@ companiesRouter.post(
       body.financialYearStartMonth || 4,
       body.logoUrl || null,
       body.signatureUrl || null,
+      body.paymentQrUrl || null,
       body.termsAndConditions || null,
       req.user!.id
     );
@@ -233,6 +236,7 @@ companiesRouter.patch(
       financial_year_start_month: body.financialYearStartMonth ?? current.financial_year_start_month,
       logo_url: body.logoUrl ?? current.logo_url,
       signature_url: body.signatureUrl ?? current.signature_url,
+      payment_qr_url: body.paymentQrUrl ?? current.payment_qr_url,
       terms_and_conditions: body.termsAndConditions ?? current.terms_and_conditions,
     };
 
@@ -240,13 +244,13 @@ companiesRouter.patch(
       `UPDATE companies SET name=?, gstin=?, pan=?, address_line1=?, address_line2=?, city=?, state=?, state_code=?,
        pincode=?, phone=?, email=?, bank_name=?, bank_account_no=?, bank_ifsc=?, bank_branch=?,
        invoice_prefix=?, credit_note_prefix=?, debit_note_prefix=?, quotation_prefix=?, certificate_prefix=?, financial_year_start_month=?,
-       logo_url=?, signature_url=?, terms_and_conditions=?, updated_at=datetime('now') WHERE id=?`
+      logo_url=?, signature_url=?, payment_qr_url=?, terms_and_conditions=?, updated_at=datetime('now') WHERE id=?`
     ).run(
       merged.name, merged.gstin, merged.pan, merged.address_line1, merged.address_line2, merged.city,
       merged.state, merged.state_code, merged.pincode, merged.phone, merged.email, merged.bank_name,
       merged.bank_account_no, merged.bank_ifsc, merged.bank_branch, merged.invoice_prefix,
       merged.credit_note_prefix, merged.debit_note_prefix, merged.quotation_prefix, merged.certificate_prefix, merged.financial_year_start_month,
-      merged.logo_url, merged.signature_url, merged.terms_and_conditions, req.companyId
+      merged.logo_url, merged.signature_url, merged.payment_qr_url, merged.terms_and_conditions, req.companyId
     );
 
     const row = (await db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.companyId)) as any;
@@ -299,6 +303,29 @@ companiesRouter.delete(
   asyncHandler(async (req, res) => {
     await db.prepare(`UPDATE companies SET signature_url = NULL, updated_at = datetime('now') WHERE id = ?`).run(req.companyId);
     res.json({ signatureUrl: null });
+  })
+);
+
+companiesRouter.post(
+  '/:companyId/payment-qr',
+  requireCompany,
+  requireRole('admin'),
+  imageUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, 'No file uploaded');
+    const dataUri = imageToDataUri(req.file);
+    await db.prepare(`UPDATE companies SET payment_qr_url = ?, updated_at = datetime('now') WHERE id = ?`).run(dataUri, req.companyId);
+    res.json({ paymentQrUrl: dataUri });
+  })
+);
+
+companiesRouter.delete(
+  '/:companyId/payment-qr',
+  requireCompany,
+  requireRole('admin'),
+  asyncHandler(async (req, res) => {
+    await db.prepare(`UPDATE companies SET payment_qr_url = NULL, updated_at = datetime('now') WHERE id = ?`).run(req.companyId);
+    res.json({ paymentQrUrl: null });
   })
 );
 

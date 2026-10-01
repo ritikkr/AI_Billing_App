@@ -37,6 +37,7 @@ export interface Company {
   financialYearStartMonth: number;
   logoUrl: string | null;
   signatureUrl: string | null;
+  paymentQrUrl: string | null;
   termsAndConditions: string | null;
   myRole?: Role;
   createdAt?: string;
@@ -239,8 +240,18 @@ export type DocumentDesign = 'classic' | 'modern' | 'minimal' | 'vyapar';
 export interface Preferences {
   printDesign: DocumentDesign;
   downloadDesign: DocumentDesign;
+  showBankName: boolean;
+  showBankBranch: boolean;
+  showBankAccountNo: boolean;
+  showBankIfsc: boolean;
+  showPaymentQr: boolean;
   updatedAt?: string;
 }
+
+export type InvoiceAccountDisplay = Pick<
+  Preferences,
+  'showBankName' | 'showBankBranch' | 'showBankAccountNo' | 'showBankIfsc' | 'showPaymentQr'
+>;
 
 export interface CertificateTemplate {
   id: string;
@@ -343,3 +354,84 @@ export interface NextDocumentNumber {
   certificateDate?: string;
   invoiceDate?: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Monthly bills                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** A recurring charge on a customer's monthly bill (taxes computed at invoice time). */
+export interface MonthlyBillItem extends Omit<InvoiceLineItem, 'id'> {
+  id?: string;
+}
+
+export interface CustomerMonthlyBill {
+  id: string;
+  companyId: string;
+  customerId: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A configured monthly bill enriched for list/table display. */
+export interface MonthlyBillSummary extends CustomerMonthlyBill {
+  customerName: string;
+  customerGroup: string | null;
+  isActive: boolean;
+  itemCount: number;
+  isInterstate: boolean;
+  monthlySubtotal: number;
+  monthlyTaxableValue: number;
+  monthlyTax: number;
+  monthlyGrandTotal: number;
+  /** Present only when the list is requested with `includeItems`. */
+  items?: MonthlyBillItem[];
+}
+
+export interface CustomerMonthlyBillResponse {
+  bill: CustomerMonthlyBill | null;
+  items: MonthlyBillItem[];
+  customerName: string;
+  customerGroup: string | null;
+  isInterstate?: boolean;
+  totals?: {
+    subtotal: number;
+    totalDiscount: number;
+    taxableValue: number;
+    totalCgst: number;
+    totalSgst: number;
+    totalIgst: number;
+    roundOff: number;
+    grandTotal: number;
+  } | null;
+  copiedFrom?: { id: string; name: string; itemCount: number };
+}
+
+/** Other customers in the same group whose monthly bill can be copied. */
+export interface MonthlyBillCopySources {
+  customerGroup: string | null;
+  sources: Array<{ id: string; name: string; itemCount: number }>;
+}
+
+export interface MonthlyBillGeneratePayload {
+  invoiceDate: string;
+  dueDate?: string | null;
+  status?: 'draft' | 'sent';
+  notes?: string | null;
+  terms?: string | null;
+  invoices: Array<{ customerId: string; lineItems: MonthlyBillItem[] }>;
+}
+
+export interface MonthlyBillGenerateResult {
+  created: Array<{
+    id: string;
+    invoiceNumber: string;
+    customerId: string;
+    customerName: string;
+    grandTotal: number;
+  }>;
+  createdCount: number;
+  skipped: Array<{ customerId: string; customerName: string; reason: string }>;
+  skippedCount: number;
+}
+

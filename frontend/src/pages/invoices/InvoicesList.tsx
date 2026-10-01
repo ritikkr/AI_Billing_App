@@ -11,6 +11,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { StatusBadge } from '../../components/ui/Badge';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { exportCsv } from '../../utils/exportCsv';
+import { GenerateMonthlyBillModal } from '../monthlybills/GenerateMonthlyBillModal';
 
 const STATUS_OPTIONS = ['', 'draft', 'sent', 'partially_paid', 'paid', 'overdue', 'cancelled'];
 
@@ -18,6 +19,7 @@ export default function InvoicesList() {
   const { companyId, canEdit } = useCompany();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['invoices', companyId, search, status],
@@ -66,6 +68,11 @@ export default function InvoicesList() {
           )} disabled={!data?.length}>
             Export CSV
           </Button>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setGenerateOpen(true)}>
+              Generate Monthly Bill
+            </Button>
+          )}
           {canEdit && (
             <Link to="/invoices/new">
               <Button>+ New Invoice</Button>
@@ -130,6 +137,8 @@ export default function InvoicesList() {
           </div>
         )}
       </Card>
+
+      <GenerateMonthlyBillModal open={generateOpen} onClose={() => setGenerateOpen(false)} />
     </div>
   );
 }

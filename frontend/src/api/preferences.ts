@@ -6,7 +6,7 @@ export async function getPreferences(companyId: string) {
   return data;
 }
 
-export async function updatePreferences(companyId: string, payload: Pick<Preferences, 'printDesign' | 'downloadDesign'>) {
+export async function updatePreferences(companyId: string, payload: Partial<Omit<Preferences, 'updatedAt'>>) {
   const { data } = await apiClient.put<Preferences>(`/companies/${companyId}/preferences`, payload);
   return data;
 }

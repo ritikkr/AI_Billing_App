@@ -38,6 +38,7 @@ const options = {
             phone: { type: 'string', nullable: true },
             logoUrl: { type: 'string', nullable: true },
             signatureUrl: { type: 'string', nullable: true },
+            paymentQrUrl: { type: 'string', nullable: true },
           },
         },
         Customer: {

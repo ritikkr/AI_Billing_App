@@ -10,6 +10,7 @@ import CustomersList from './pages/customers/CustomersList';
 import CustomerDetail from './pages/customers/CustomerDetail';
 import ItemsList from './pages/items/ItemsList';
 import InvoicesList from './pages/invoices/InvoicesList';
+import MonthlyBillsList from './pages/monthlybills/MonthlyBillsList';
 import InvoiceForm from './pages/invoices/InvoiceForm';
 import InvoiceDetail from './pages/invoices/InvoiceDetail';
 import CreditNotesList from './pages/creditnotes/CreditNotesList';
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/invoices/new" element={<InvoiceForm />} />
             <Route path="/invoices/:id" element={<InvoiceDetail />} />
             <Route path="/invoices/:id/edit" element={<InvoiceForm />} />
+            <Route path="/monthly-bills" element={<MonthlyBillsList />} />
             <Route path="/quotations" element={<QuotationsList />} />
             <Route path="/quotations/new" element={<QuotationForm />} />
             <Route path="/quotations/:id" element={<QuotationDetail />} />

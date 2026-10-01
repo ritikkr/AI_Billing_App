@@ -1,8 +1,29 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { amountInWords } from '../utils/gst';
-import type { InvoiceDetail, DocumentDesign } from '../types';
+import type { InvoiceDetail, DocumentDesign, InvoiceAccountDisplay } from '../types';
 
 Font.registerHyphenationCallback((word) => [word]);
+
+const DEFAULT_ACCOUNT_DISPLAY: InvoiceAccountDisplay = {
+  showBankName: true,
+  showBankBranch: true,
+  showBankAccountNo: true,
+  showBankIfsc: true,
+  showPaymentQr: true,
+};
+
+function visibleAccountDetails(company: any, display: InvoiceAccountDisplay) {
+  const bankName = display.showBankName ? company.bank_name : null;
+  const bankBranch = display.showBankBranch ? company.bank_branch : null;
+  const bankAccountNo = display.showBankAccountNo ? company.bank_account_no : null;
+  const bankIfsc = display.showBankIfsc ? company.bank_ifsc : null;
+  const paymentQrUrl = display.showPaymentQr ? company.payment_qr_url : null;
+  return { bankName, bankBranch, bankAccountNo, bankIfsc, paymentQrUrl, hasBankDetails: !!(bankName || bankBranch || bankAccountNo || bankIfsc) };
+}
+
+function invoiceQuantity(qty: number, unit?: string | null) {
+  return unit?.trim().toUpperCase() === 'NOS' ? qty : `${qty} ${unit || ''}`.trim();
+}
 
 const base = {
   classic: {
@@ -112,10 +133,11 @@ function buildStyles(design: Exclude<DocumentDesign, 'vyapar'>) {
   });
 }
 
-export function InvoicePdf({ invoice, design = 'classic' }: { invoice: InvoiceDetail; design?: DocumentDesign }) {
-  if (design === 'vyapar') return <VyaparPdf invoice={invoice} />;
+export function InvoicePdf({ invoice, design = 'classic', accountDisplay = DEFAULT_ACCOUNT_DISPLAY }: { invoice: InvoiceDetail; design?: DocumentDesign; accountDisplay?: InvoiceAccountDisplay }) {
+  if (design === 'vyapar') return <VyaparPdf invoice={invoice} accountDisplay={accountDisplay} />;
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   const styles = buildStyles(design);
 
   return (
@@ -247,13 +269,18 @@ export function InvoicePdf({ invoice, design = 'classic' }: { invoice: InvoiceDe
 
         <Text style={{ ...styles.small, marginTop: 6 }}>Amount in words: {amountInWords(invoice.grandTotal)}</Text>
 
-        {(company.bank_name || company.bank_account_no) && (
+        {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
           <View style={styles.bankBox}>
-            <Text style={styles.label}>Bank Details</Text>
-            <Text style={styles.small}>Bank: {company.bank_name}</Text>
-            <Text style={styles.small}>Account No: {company.bank_account_no}</Text>
-            <Text style={styles.small}>IFSC: {company.bank_ifsc}</Text>
-            {company.bank_branch && <Text style={styles.small}>Branch: {company.bank_branch}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              {accounts.paymentQrUrl && <Image src={accounts.paymentQrUrl} style={{ height: 48, width: 48, objectFit: 'contain', marginRight: 10 }} />}
+              <View>
+                {accounts.hasBankDetails && <Text style={styles.label}>Bank Details</Text>}
+                {accounts.bankName && <Text style={styles.small}>Bank: {accounts.bankName}</Text>}
+                {accounts.bankAccountNo && <Text style={styles.small}>Account No: {accounts.bankAccountNo}</Text>}
+                {accounts.bankIfsc && <Text style={styles.small}>IFSC: {accounts.bankIfsc}</Text>}
+                {accounts.bankBranch && <Text style={styles.small}>Branch: {accounts.bankBranch}</Text>}
+              </View>
+            </View>
           </View>
         )}
 
@@ -286,253 +313,264 @@ export function InvoicePdf({ invoice, design = 'classic' }: { invoice: InvoiceDe
   );
 }
 
-function VyaparPdf({ invoice }: { invoice: InvoiceDetail }) {
+function VyaparPdf({ invoice, accountDisplay }: { invoice: InvoiceDetail; accountDisplay: InvoiceAccountDisplay }) {
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   const tax = invoice.isInterstate ? invoice.totalIgst : (invoice.totalCgst || 0) + (invoice.totalSgst || 0);
   const gstRate = invoice.taxableValue ? Math.round((tax / invoice.taxableValue) * 100) : 0;
   const qtySum = invoice.lineItems.reduce((sum, item) => sum + (item.qty || 0), 0);
-  const BORDER = { borderColor: '#808080', borderWidth: 0.75 } as const;
-  const topBorder = { borderTopWidth: 0.75, borderTopColor: '#808080' } as const;
-  const cell = { ...BORDER, paddingVertical: 3, paddingHorizontal: 5 };
+  const formatAmount = (value: number | null | undefined) =>
+    `Rs. ${(value ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const BORDER = { borderColor: '#888888', borderWidth: 0.5 } as const;
+  const topBorder = { borderTopWidth: 0.5, borderTopColor: '#888888' } as const;
+  const cell = { ...BORDER, paddingVertical: 2, paddingHorizontal: 4 };
   const rightCell = { ...cell, textAlign: 'right' as const };
   const boldCell = { ...cell, fontWeight: 700 };
   const amountRow = {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     ...topBorder,
   };
 
   return (
     <Document title={`${invoice.invoiceNumber}`}>
-      <Page size="A4" style={{ padding: 28, fontSize: 9.5, fontFamily: 'Helvetica', color: '#0f172a', lineHeight: 1.4 }}>
-        <Text style={{ textAlign: 'center', fontSize: 13, fontWeight: 700 }}>Tax Invoice</Text>
+      <Page size="A4" style={{ paddingTop: 30, paddingHorizontal: 42, paddingBottom: 28, fontSize: 10.08, fontFamily: 'Helvetica', color: '#0f172a', lineHeight: 1.35 }}>
+        <Text style={{ textAlign: 'center', fontSize: 11.52, fontWeight: 700 }}>Tax Invoice</Text>
 
-        <View style={{ ...BORDER, marginTop: 8, flexDirection: 'row' }}>
-          <View style={{ ...BORDER, flexGrow: 1, flexBasis: 0, padding: 7 }}>
+        <View style={{ ...BORDER, marginTop: 2, flexDirection: 'row' }}>
+          <View style={{ width: '50%', flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: 3, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
             {company.logo_url && (
-              <Image src={company.logo_url} style={{ height: 34, maxWidth: 150, objectFit: 'contain', marginBottom: 4 }} />
+              <Image src={company.logo_url} style={{ height: 45, width: 45, objectFit: 'contain', marginRight: 8 }} />
             )}
-            <Text style={{ fontSize: 12, fontWeight: 700 }}>{company.name}</Text>
-            <Text style={{ fontSize: 8, marginTop: 2 }}>
-              {[company.address_line1, company.address_line2, company.city, company.state, company.pincode].filter(Boolean).join(', ')}
-            </Text>
-            <Text style={{ fontSize: 8 }}>Phone no.: {company.phone}</Text>
-            {company.email && <Text style={{ fontSize: 8 }}>Email: {company.email}</Text>}
-            {company.gstin && <Text style={{ fontSize: 8 }}>GSTIN: {company.gstin}</Text>}
-            <Text style={{ fontSize: 8 }}>State: {[company.stateCode, company.state].filter(Boolean).join('-')}</Text>
+            <View style={{ flexGrow: 1, flexBasis: 0 }}>
+              <Text style={{ fontSize: 11.52, fontWeight: 700 }}>{company.name}</Text>
+              <Text style={{ fontSize: 7.68, marginTop: 2 }}>
+                {[company.address_line1, company.address_line2, company.city, company.state, company.pincode].filter(Boolean).join(', ')}
+              </Text>
+              {company.phone && <Text style={{ fontSize: 7.68 }}>Phone no.: {company.phone}</Text>}
+              {company.email && <Text style={{ fontSize: 7.68 }}>Email: {company.email}</Text>}
+              {company.gstin && <Text style={{ fontSize: 7.68 }}>GSTIN: {company.gstin}</Text>}
+              <Text style={{ fontSize: 7.68 }}>State: {[company.stateCode, company.state].filter(Boolean).join('-')}</Text>
+            </View>
           </View>
-          <View style={{ ...BORDER, width: '32%', padding: 0 }}>
-            <View style={{ ...BORDER, flexDirection: 'row' }}>
-              <View style={{ flexBasis: '50%' as const, padding: 5 }}>
-                <Text style={{ fontSize: 7.5, color: '#475569' }}>Invoice No.</Text>
-                <Text style={{ fontSize: 10, fontWeight: 700 }}>{invoice.invoiceNumber}</Text>
+          <View style={{ width: '50%' }}>
+            <View style={{ flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#888888' }}>
+              <View style={{ width: '50%', padding: 4, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+                <Text style={{ fontSize: 7.2, color: '#475569' }}>Invoice No.</Text>
+                <Text style={{ fontSize: 11.52, fontWeight: 700 }}>{invoice.invoiceNumber}</Text>
               </View>
-              <View style={{ ...BORDER, flexBasis: '50%' as const, padding: 5 }}>
-                <Text style={{ fontSize: 7.5, color: '#475569' }}>Date</Text>
-                <Text style={{ fontSize: 10, fontWeight: 700 }}>{formatDate(invoice.invoiceDate)}</Text>
+              <View style={{ width: '50%', padding: 4 }}>
+                <Text style={{ fontSize: 7.2, color: '#475569' }}>Date</Text>
+                <Text style={{ fontSize: 11.52, fontWeight: 700 }}>{formatDate(invoice.invoiceDate)}</Text>
               </View>
             </View>
-            <View style={{ padding: 5 }}>
-              <Text style={{ fontSize: 7.5, color: '#475569' }}>Place of supply</Text>
-              <Text style={{ fontSize: 10, fontWeight: 700 }}>
-                {[invoice.placeOfSupplyStateCode, customer.billing_state].filter(Boolean).join('-') || '-'}
-              </Text>
+            <View style={{ flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#888888' }}>
+              <View style={{ width: '50%', padding: 4, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+                <Text style={{ fontSize: 7.2, color: '#475569' }}>Place of supply</Text>
+                <Text style={{ fontSize: 11.52, fontWeight: 700 }}>
+                  {[invoice.placeOfSupplyStateCode, customer.billing_state].filter(Boolean).join('-') || '-'}
+                </Text>
+              </View>
+              <View style={{ width: '50%' }} />
             </View>
           </View>
         </View>
 
-        <View style={{ ...BORDER, marginTop: 8 }}>
-          <Text style={{ ...BORDER, fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase', paddingVertical: 2, paddingHorizontal: 7 }}>
+        <View style={BORDER}>
+          <Text style={{ borderBottomWidth: 0.5, borderBottomColor: '#888888', fontSize: 7.2, paddingVertical: 2, paddingHorizontal: 4 }}>
             Bill To
           </Text>
-          <View style={{ padding: 7 }}>
+          <View style={{ paddingVertical: 4, paddingHorizontal: 4 }}>
             <Text style={{ fontWeight: 700 }}>{customer.name}</Text>
-            <Text style={{ fontSize: 8.5 }}>
+            <Text style={{ fontSize: 10.08 }}>
               {[customer.billing_address, customer.billing_city, customer.billing_state, customer.billing_pincode].filter(Boolean).join(', ')}
             </Text>
-            {customer.gstin && <Text style={{ fontSize: 8.5 }}>GSTIN : {customer.gstin}</Text>}
-            <Text style={{ fontSize: 8.5 }}>State: {customer.billing_state || [company.stateCode, company.state].filter(Boolean).join('-')}</Text>
+            {customer.gstin && <Text style={{ fontSize: 10.08 }}>GSTIN : {customer.gstin}</Text>}
+            <Text style={{ fontSize: 10.08 }}>State: {customer.billing_state || [company.stateCode, company.state].filter(Boolean).join('-')}</Text>
           </View>
         </View>
 
-        <View style={{ ...BORDER, marginTop: 8 }}>
-          <View style={{ ...BORDER, flexDirection: 'row' }}>
-            <Text style={[boldCell, { width: '4%', fontSize: 8 }]}>#</Text>
-            <Text style={[boldCell, { width: '34%', fontSize: 8 }]}>Item name</Text>
-            <Text style={[boldCell, { width: '13%', fontSize: 8 }]}>HSN/ SAC</Text>
-            <Text style={[boldCell, { width: '13%', fontSize: 8, textAlign: 'right' }]}>Quantity</Text>
-            <Text style={[boldCell, { width: '17%', fontSize: 8, textAlign: 'right' }]}>Price/ Unit</Text>
-            <Text style={[boldCell, { width: '19%', fontSize: 8, textAlign: 'right' }]}>Amount</Text>
+        <View style={{ ...BORDER, marginTop: 0 }}>
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={[boldCell, { width: '5.5%', fontSize: 10.08 }]}>#</Text>
+            <Text style={[boldCell, { width: '34%', fontSize: 10.08 }]}>Item name</Text>
+            <Text style={[boldCell, { width: '14%', fontSize: 10.08 }]}>HSN/ SAC</Text>
+            <Text style={[boldCell, { width: '15.5%', fontSize: 10.08, textAlign: 'right' }]}>Quantity</Text>
+            <Text style={[boldCell, { width: '15.5%', fontSize: 10.08, textAlign: 'right' }]}>Price/ Unit</Text>
+            <Text style={[boldCell, { width: '15.5%', fontSize: 10.08, textAlign: 'right' }]}>Amount</Text>
           </View>
           {invoice.lineItems.map((item, idx) => (
             <View style={{ ...BORDER, flexDirection: 'row' }} key={item.id || idx} wrap={false}>
-              <Text style={[cell, { width: '4%' }]}>{idx + 1}</Text>
+              <Text style={[cell, { width: '5.5%' }]}>{idx + 1}</Text>
               <Text style={[cell, { width: '34%' }]}>{item.description}</Text>
-              <Text style={[cell, { width: '13%' }]}>{item.hsnSacCode || '-'}</Text>
-              <Text style={[rightCell, { width: '13%' }]}>
-                {item.qty} {item.unit}
-              </Text>
-              <Text style={[rightCell, { width: '17%' }]}>{fmt(item.rate)}</Text>
-              <Text style={[rightCell, { width: '19%' }]}>{fmt(item.lineTotal)}</Text>
+              <Text style={[cell, { width: '14%' }]}>{item.hsnSacCode || '-'}</Text>
+              <Text style={[rightCell, { width: '15.5%' }]}>{invoiceQuantity(item.qty, item.unit)}</Text>
+              <Text style={[rightCell, { width: '15.5%' }]}>{formatAmount(item.rate)}</Text>
+              <Text style={[rightCell, { width: '15.5%' }]}>{formatAmount(item.lineTotal)}</Text>
             </View>
           ))}
           <View style={{ flexDirection: 'row' }}>
-            <Text style={[cell, { width: '38%', fontWeight: 700 }]}>Total</Text>
-            <Text style={[cell, { width: '13%' }]} />
-            <Text style={[rightCell, { width: '13%', fontWeight: 700 }]}>{qtySum}</Text>
-            <Text style={[cell, { width: '17%' }]} />
-            <Text style={[rightCell, { width: '19%', fontWeight: 700 }]}>{fmt(invoice.subtotal)}</Text>
+            <Text style={[cell, { width: '39.5%', fontWeight: 700 }]}>Total</Text>
+            <Text style={[cell, { width: '14%' }]} />
+            <Text style={[rightCell, { width: '15.5%', fontWeight: 700 }]}>{qtySum}</Text>
+            <Text style={[cell, { width: '15.5%' }]} />
+            <Text style={[rightCell, { width: '15.5%', fontWeight: 700 }]}>{formatAmount(invoice.subtotal)}</Text>
           </View>
         </View>
 
-        <View style={{ ...BORDER, marginTop: 8, flexDirection: 'row' }}>
-          <View style={{ ...BORDER, flexBasis: '56%' as const, padding: 7 }}>
-            <Text style={{ fontSize: 7.5, color: '#475569' }}>Invoice Amount in Words</Text>
-            <Text style={{ fontSize: 8.5, fontWeight: 700, marginTop: 2 }}>{amountInWords(invoice.grandTotal)}</Text>
+        <View style={{ ...BORDER, flexDirection: 'row' }}>
+          <View style={{ width: '50%', padding: 4, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+            <Text style={{ fontSize: 7.2, color: '#475569' }}>Invoice Amount in Words</Text>
+            <Text style={{ fontSize: 10.08, fontWeight: 700, marginTop: 2 }}>{amountInWords(invoice.grandTotal)}</Text>
           </View>
-          <View style={{ flexBasis: '44%' as const }}>
-            <Text style={{ fontWeight: 700, padding: 6 }}>Amounts</Text>
+          <View style={{ width: '50%' }}>
+            <Text style={{ fontWeight: 700, padding: 4 }}>Amounts</Text>
             <View style={amountRow}>
               <Text>Sub Total</Text>
-              <Text>{fmt(invoice.subtotal)}</Text>
+              <Text>{formatAmount(invoice.subtotal)}</Text>
             </View>
             {invoice.totalDiscount > 0 && (
               <View style={amountRow}>
                 <Text>Discount</Text>
-                <Text>-{fmt(invoice.totalDiscount)}</Text>
+                <Text>-{formatAmount(invoice.totalDiscount)}</Text>
               </View>
             )}
             {gstRate > 0 && (
               <View style={amountRow}>
                 <Text>Tax ({gstRate}%)</Text>
-                <Text>{fmt(tax)}</Text>
+                <Text>{formatAmount(tax)}</Text>
               </View>
             )}
             {invoice.roundOff !== 0 && (
               <View style={amountRow}>
                 <Text>Round off</Text>
-                <Text>{fmt(invoice.roundOff)}</Text>
+                <Text>{formatAmount(invoice.roundOff)}</Text>
               </View>
             )}
             <View style={{ ...amountRow, fontWeight: 700 }}>
               <Text>Total</Text>
-              <Text>{fmt(invoice.grandTotal)}</Text>
+              <Text>{formatAmount(invoice.grandTotal)}</Text>
             </View>
           </View>
         </View>
 
-        <View style={{ ...BORDER, marginTop: 8 }}>
-          <View style={{ ...BORDER, flexDirection: 'row' }}>
-            <Text style={[boldCell, { width: '14%', fontSize: 8 }]}>HSN/ SAC</Text>
-            <Text style={[boldCell, { width: '18%', fontSize: 8, textAlign: 'right' }]}>Taxable amount</Text>
+        <View style={BORDER}>
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={[boldCell, { width: '16%', fontSize: 8, textAlign: 'center', paddingVertical: 8 }]}>HSN/ SAC</Text>
+            <Text style={[boldCell, { width: '18%', fontSize: 8, textAlign: 'center', paddingVertical: 8 }]}>Taxable amount</Text>
             {!invoice.isInterstate ? (
               <>
-                <Text style={[BORDER, { width: '24%', textAlign: 'center', paddingVertical: 3, fontSize: 8, fontWeight: 700 }]}>CGST</Text>
-                <Text style={[BORDER, { width: '24%', textAlign: 'center', paddingVertical: 3, fontSize: 8, fontWeight: 700 }]}>SGST</Text>
-                <Text style={[boldCell, { width: '20%', fontSize: 8, textAlign: 'right' }]}>Total Tax Amount</Text>
+                <View style={{ width: '22%', borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+                  <Text style={{ ...BORDER, borderBottomWidth: 0, fontSize: 8, fontWeight: 700, textAlign: 'center', paddingVertical: 2 }}>CGST</Text>
+                  <View style={{ flexDirection: 'row' }}>
+                    <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Rate</Text>
+                    <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Amount</Text>
+                  </View>
+                </View>
+                <View style={{ width: '22%', borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+                  <Text style={{ ...BORDER, borderBottomWidth: 0, fontSize: 8, fontWeight: 700, textAlign: 'center', paddingVertical: 2 }}>SGST</Text>
+                  <View style={{ flexDirection: 'row' }}>
+                    <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Rate</Text>
+                    <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Amount</Text>
+                  </View>
+                </View>
               </>
             ) : (
-              <>
-                <Text style={[BORDER, { width: '34%', textAlign: 'center', paddingVertical: 3, fontSize: 8, fontWeight: 700 }]}>IGST</Text>
-                <Text style={[boldCell, { width: '34%', fontSize: 8, textAlign: 'right' }]}>Total Tax Amount</Text>
-              </>
+              <View style={{ width: '44%', borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+                <Text style={{ ...BORDER, borderBottomWidth: 0, fontSize: 8, fontWeight: 700, textAlign: 'center', paddingVertical: 2 }}>IGST</Text>
+                <View style={{ flexDirection: 'row' }}>
+                  <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Rate</Text>
+                  <Text style={[boldCell, { width: '50%', fontSize: 8, textAlign: 'center' }]}>Amount</Text>
+                </View>
+              </View>
             )}
-          </View>
-          <View style={{ ...BORDER, flexDirection: 'row' }}>
-            {!invoice.isInterstate ? (
-              <>
-                <Text style={[cell, { width: '32%' }]} />
-                <Text style={[rightCell, { width: '16%', fontSize: 8, fontWeight: 700 }]}>Rate</Text>
-                <Text style={[rightCell, { width: '16%', fontSize: 8, fontWeight: 700 }]}>Amount</Text>
-                <Text style={[rightCell, { width: '16%', fontSize: 8, fontWeight: 700 }]}>Rate</Text>
-                <Text style={[rightCell, { width: '16%', fontSize: 8, fontWeight: 700 }]}>Amount</Text>
-              </>
-            ) : (
-              <>
-                <Text style={[cell, { width: '32%' }]} />
-                <Text style={[rightCell, { width: '34%', fontSize: 8, fontWeight: 700 }]}>Rate</Text>
-                <Text style={[rightCell, { width: '34%', fontSize: 8, fontWeight: 700 }]}>Amount</Text>
-              </>
-            )}
+            <Text style={[boldCell, { width: '22%', fontSize: 8, textAlign: 'center', paddingVertical: 8 }]}>Total Tax Amount</Text>
           </View>
         </View>
 
-        <View style={{ marginTop: 4 }}>
+        <View>
           {invoice.lineItems.map((item, idx) => (
             <View style={{ flexDirection: 'row' }} key={item.id || idx} wrap={false}>
-              <Text style={[cell, { width: '14%' }]}>{item.hsnSacCode || '-'}</Text>
-              <Text style={[rightCell, { width: '18%' }]}>{fmt(item.taxableValue)}</Text>
+              <Text style={[cell, { width: '16%' }]}>{item.hsnSacCode || '-'}</Text>
+              <Text style={[rightCell, { width: '18%' }]}>{formatAmount(item.taxableValue)}</Text>
               {!invoice.isInterstate ? (
                 <>
-                  <Text style={[rightCell, { width: '12%' }]}>{item.gstRate}%</Text>
-                  <Text style={[rightCell, { width: '12%' }]}>{fmt(item.cgstAmount || 0)}</Text>
-                  <Text style={[rightCell, { width: '12%' }]}>{item.gstRate}%</Text>
-                  <Text style={[rightCell, { width: '12%' }]}>{fmt(item.sgstAmount || 0)}</Text>
-                  <Text style={[rightCell, { width: '20%' }]}>{fmt((item.cgstAmount || 0) + (item.sgstAmount || 0) + (item.igstAmount || 0))}</Text>
+                  <Text style={[rightCell, { width: '8%' }]}>{item.gstRate}%</Text>
+                  <Text style={[rightCell, { width: '14%' }]}>{formatAmount(item.cgstAmount || 0)}</Text>
+                  <Text style={[rightCell, { width: '8%' }]}>{item.gstRate}%</Text>
+                  <Text style={[rightCell, { width: '14%' }]}>{formatAmount(item.sgstAmount || 0)}</Text>
+                  <Text style={[rightCell, { width: '22%' }]}>{formatAmount((item.cgstAmount || 0) + (item.sgstAmount || 0) + (item.igstAmount || 0))}</Text>
                 </>
               ) : (
                 <>
-                  <Text style={[rightCell, { width: '17%' }]}>{item.gstRate}%</Text>
-                  <Text style={[rightCell, { width: '17%' }]}>{fmt(item.igstAmount || 0)}</Text>
-                  <Text style={[rightCell, { width: '34%' }]}>{fmt((item.sgstAmount || 0) + (item.igstAmount || 0))}</Text>
+                  <Text style={[rightCell, { width: '22%' }]}>{item.gstRate}%</Text>
+                  <Text style={[rightCell, { width: '22%' }]}>{formatAmount(item.igstAmount || 0)}</Text>
+                  <Text style={[rightCell, { width: '22%' }]}>{formatAmount(item.igstAmount || 0)}</Text>
                 </>
               )}
             </View>
           ))}
           <View style={{ flexDirection: 'row' }}>
-            <Text style={[boldCell, { width: '14%' }]}>Total</Text>
-            <Text style={[rightCell, { width: '18%', fontWeight: 700 }]}>{fmt(invoice.taxableValue)}</Text>
+            <Text style={[boldCell, { width: '16%' }]}>Total</Text>
+            <Text style={[rightCell, { width: '18%', fontWeight: 700 }]}>{formatAmount(invoice.taxableValue)}</Text>
             {!invoice.isInterstate ? (
               <>
-                <Text style={[cell, { width: '12%' }]} />
-                <Text style={[rightCell, { width: '12%', fontWeight: 700 }]}>{fmt(invoice.totalCgst)}</Text>
-                <Text style={[cell, { width: '12%' }]} />
-                <Text style={[rightCell, { width: '12%', fontWeight: 700 }]}>{fmt(invoice.totalSgst)}</Text>
-                <Text style={[rightCell, { width: '20%', fontWeight: 700 }]}>{fmt(invoice.totalCgst + invoice.totalSgst)}</Text>
+                <Text style={[cell, { width: '8%' }]} />
+                <Text style={[rightCell, { width: '14%', fontWeight: 700 }]}>{formatAmount(invoice.totalCgst)}</Text>
+                <Text style={[cell, { width: '8%' }]} />
+                <Text style={[rightCell, { width: '14%', fontWeight: 700 }]}>{formatAmount(invoice.totalSgst)}</Text>
+                <Text style={[rightCell, { width: '22%', fontWeight: 700 }]}>{formatAmount(invoice.totalCgst + invoice.totalSgst)}</Text>
               </>
             ) : (
               <>
-                <Text style={[cell, { width: '17%' }]} />
-                <Text style={[rightCell, { width: '17%', fontWeight: 700 }]}>{fmt(invoice.totalIgst)}</Text>
-                <Text style={[rightCell, { width: '34%', fontWeight: 700 }]}>{fmt(invoice.totalIgst)}</Text>
+                <Text style={[cell, { width: '22%' }]} />
+                <Text style={[rightCell, { width: '22%', fontWeight: 700 }]}>{formatAmount(invoice.totalIgst)}</Text>
+                <Text style={[rightCell, { width: '22%', fontWeight: 700 }]}>{formatAmount(invoice.totalIgst)}</Text>
               </>
             )}
           </View>
         </View>
 
-        <View style={{ ...BORDER, marginTop: 8, flexDirection: 'row' }}>
-          {(company.bank_name || company.bank_account_no) && (
-            <View style={{ ...BORDER, width: '34%', padding: 6 }}>
-              <Text style={{ fontSize: 8, fontWeight: 700 }}>Bank Details</Text>
-              {company.bank_name && <Text style={{ fontSize: 7.5 }}>Name : {company.bank_name}</Text>}
-              {company.bank_account_no && <Text style={{ fontSize: 7.5 }}>Account No. : {company.bank_account_no}</Text>}
-              {company.bank_ifsc && <Text style={{ fontSize: 7.5 }}>IFSC code : {company.bank_ifsc}</Text>}
-              {company.bank_branch && <Text style={{ fontSize: 7.5 }}>Branch : {company.bank_branch}</Text>}
+        <View style={BORDER}>
+          <View style={{ flexDirection: 'row' }}>
+          {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
+            <View style={{ width: '33.333%', padding: 5, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                {accounts.paymentQrUrl && <Image src={accounts.paymentQrUrl} style={{ height: 48, width: 48, objectFit: 'contain', marginRight: 6 }} />}
+                <View style={{ flexGrow: 1, flexBasis: 0 }}>
+                  {accounts.hasBankDetails && <Text style={{ fontSize: 10.08, fontWeight: 700 }}>Bank Details</Text>}
+                  {accounts.bankName && <Text style={{ fontSize: 7.68 }}>Name : {accounts.bankName}</Text>}
+                  {accounts.bankAccountNo && <Text style={{ fontSize: 7.68 }}>Account No. : {accounts.bankAccountNo}</Text>}
+                  {accounts.bankIfsc && <Text style={{ fontSize: 7.68 }}>IFSC code : {accounts.bankIfsc}</Text>}
+                  {accounts.bankBranch && <Text style={{ fontSize: 7.68 }}>Branch : {accounts.bankBranch}</Text>}
+                </View>
+              </View>
             </View>
           )}
-          <View style={{ ...BORDER, flexGrow: 1, flexBasis: 0, padding: 6 }}>
+          <View style={{ width: accounts.hasBankDetails || accounts.paymentQrUrl ? '33.333%' : '66.667%', padding: 5, borderRightWidth: 0.5, borderRightColor: '#888888' }}>
             {invoice.notes && (
               <>
-                <Text style={{ fontSize: 8, fontWeight: 700 }}>Notes</Text>
-                <Text style={{ fontSize: 7.5 }}>{invoice.notes}</Text>
+                <Text style={{ fontSize: 10.08, fontWeight: 700 }}>Notes</Text>
+                <Text style={{ fontSize: 10.08 }}>{invoice.notes}</Text>
               </>
             )}
             {invoice.terms && (
               <>
-                <Text style={{ fontSize: 8, fontWeight: 700 }}>Terms and conditions</Text>
-                <Text style={{ fontSize: 7.5 }}>{invoice.terms}</Text>
+                <Text style={{ fontSize: 10.08, fontWeight: 700 }}>Terms and conditions</Text>
+                <Text style={{ fontSize: 10.08 }}>{invoice.terms}</Text>
               </>
             )}
           </View>
-          <View style={{ ...BORDER, width: '34%', padding: 6, alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 8 }}>For : {company.name}</Text>
+          <View style={{ width: '33.334%', padding: 5, alignItems: 'center' }}>
+            <Text style={{ fontSize: 10.08 }}>For : {company.name}</Text>
             {company.signature_url && (
               <Image src={company.signature_url} style={{ height: 38, maxWidth: 130, objectFit: 'contain', marginTop: 6 }} />
             )}
-            <Text style={{ fontSize: 8, fontWeight: 700, marginTop: company.signature_url ? 2 : 26 }}>Authorized Signatory</Text>
+            <Text style={{ fontSize: 10.08, fontWeight: 700, marginTop: company.signature_url ? 2 : 26 }}>Authorized Signatory</Text>
+          </View>
           </View>
         </View>
       </Page>

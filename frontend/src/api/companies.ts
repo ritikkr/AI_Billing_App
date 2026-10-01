@@ -70,3 +70,17 @@ export async function removeCompanySignature(companyId: string) {
   const { data } = await apiClient.delete<{ signatureUrl: null }>(`/companies/${companyId}/signature`);
   return data;
 }
+
+export async function uploadCompanyPaymentQr(companyId: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<{ paymentQrUrl: string }>(`/companies/${companyId}/payment-qr`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function removeCompanyPaymentQr(companyId: string) {
+  const { data } = await apiClient.delete<{ paymentQrUrl: null }>(`/companies/${companyId}/payment-qr`);
+  return data;
+}

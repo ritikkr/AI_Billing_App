@@ -1,12 +1,29 @@
-import type { InvoiceDetail, DocumentDesign } from '../../types';
+import type { InvoiceDetail, DocumentDesign, InvoiceAccountDisplay } from '../../types';
 import { amountInWords } from '../../utils/gst';
 import { formatCurrency, formatDate } from '../../utils/format';
 
-export function InvoicePrintView({ invoice, design = 'classic' }: { invoice: InvoiceDetail; design?: DocumentDesign }) {
-  if (design === 'modern') return <ModernInvoice invoice={invoice} />;
-  if (design === 'minimal') return <MinimalInvoice invoice={invoice} />;
-  if (design === 'vyapar') return <VyaparInvoice invoice={invoice} />;
-  return <ClassicInvoice invoice={invoice} />;
+const DEFAULT_ACCOUNT_DISPLAY: InvoiceAccountDisplay = {
+  showBankName: true,
+  showBankBranch: true,
+  showBankAccountNo: true,
+  showBankIfsc: true,
+  showPaymentQr: true,
+};
+
+function visibleAccountDetails(company: any, display: InvoiceAccountDisplay) {
+  const bankName = display.showBankName ? company.bank_name : null;
+  const bankBranch = display.showBankBranch ? company.bank_branch : null;
+  const bankAccountNo = display.showBankAccountNo ? company.bank_account_no : null;
+  const bankIfsc = display.showBankIfsc ? company.bank_ifsc : null;
+  const paymentQrUrl = display.showPaymentQr ? company.payment_qr_url : null;
+  return { bankName, bankBranch, bankAccountNo, bankIfsc, paymentQrUrl, hasBankDetails: !!(bankName || bankBranch || bankAccountNo || bankIfsc) };
+}
+
+export function InvoicePrintView({ invoice, design = 'classic', accountDisplay = DEFAULT_ACCOUNT_DISPLAY }: { invoice: InvoiceDetail; design?: DocumentDesign; accountDisplay?: InvoiceAccountDisplay }) {
+  if (design === 'modern') return <ModernInvoice invoice={invoice} accountDisplay={accountDisplay} />;
+  if (design === 'minimal') return <MinimalInvoice invoice={invoice} accountDisplay={accountDisplay} />;
+  if (design === 'vyapar') return <VyaparInvoice invoice={invoice} accountDisplay={accountDisplay} />;
+  return <ClassicInvoice invoice={invoice} accountDisplay={accountDisplay} />;
 }
 
 function companyAddress(company: any) {
@@ -35,15 +52,20 @@ function stateTag(code?: string | null, name?: string | null) {
   return [code, name].filter(Boolean).join('-') || '-';
 }
 
+function invoiceQuantity(qty: number, unit?: string | null) {
+  return unit?.trim().toUpperCase() === 'NOS' ? qty : `${qty} ${unit || ''}`.trim();
+}
+
 function effectiveGstRate(invoice: InvoiceDetail) {
   const tax = invoice.isInterstate ? invoice.totalIgst : (invoice.totalCgst || 0) + (invoice.totalSgst || 0);
   if (!tax || !invoice.taxableValue) return null;
   return Math.round((tax / invoice.taxableValue) * 100);
 }
 
-function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
+function ClassicInvoice({ invoice, accountDisplay }: { invoice: InvoiceDetail; accountDisplay: InvoiceAccountDisplay }) {
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   return (
     <div className="px-8 pb-8 pt-10 text-[13px] leading-snug text-slate-800">
       <div className="flex items-start justify-between">
@@ -88,13 +110,16 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
       <p className="mt-3 text-xs text-slate-600">Amount in words: {amountInWords(invoice.grandTotal)}</p>
 
-      {(company.bank_name || company.bank_account_no) && (
-        <div className="mt-4 rounded-md border border-slate-100 bg-slate-50 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Bank Details</p>
-          <p className="mt-1 text-xs text-slate-600">Bank: {company.bank_name}</p>
-          <p className="text-xs text-slate-600">Account No: {company.bank_account_no}</p>
-          <p className="text-xs text-slate-600">IFSC: {company.bank_ifsc}</p>
-          {company.bank_branch && <p className="text-xs text-slate-600">Branch: {company.bank_branch}</p>}
+      {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
+        <div className="mt-4 flex items-start gap-3 rounded-md border border-slate-100 bg-slate-50 p-3">
+          {accounts.paymentQrUrl && <img src={accounts.paymentQrUrl} alt="Payment QR code" className="h-16 w-16 shrink-0 object-contain" />}
+          <div>
+            {accounts.hasBankDetails && <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Bank Details</p>}
+            {accounts.bankName && <p className="mt-1 text-xs text-slate-600">Bank: {accounts.bankName}</p>}
+            {accounts.bankAccountNo && <p className="text-xs text-slate-600">Account No: {accounts.bankAccountNo}</p>}
+            {accounts.bankIfsc && <p className="text-xs text-slate-600">IFSC: {accounts.bankIfsc}</p>}
+            {accounts.bankBranch && <p className="text-xs text-slate-600">Branch: {accounts.bankBranch}</p>}
+          </div>
         </div>
       )}
 
@@ -124,9 +149,10 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
   );
 }
 
-function ModernInvoice({ invoice }: { invoice: InvoiceDetail }) {
+function ModernInvoice({ invoice, accountDisplay }: { invoice: InvoiceDetail; accountDisplay: InvoiceAccountDisplay }) {
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   return (
     <div className="text-[13px] leading-snug text-slate-800">
       <div className="rounded-t-xl bg-indigo-700 px-8 py-6 text-white">
@@ -172,13 +198,16 @@ function ModernInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
         <p className="mt-3 text-xs text-slate-600">Amount in words: {amountInWords(invoice.grandTotal)}</p>
 
-        {(company.bank_name || company.bank_account_no) && (
-          <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">Bank Details</p>
-            <p className="mt-1 text-xs text-slate-600">Bank: {company.bank_name}</p>
-            <p className="text-xs text-slate-600">Account No: {company.bank_account_no}</p>
-            <p className="text-xs text-slate-600">IFSC: {company.bank_ifsc}</p>
-            {company.bank_branch && <p className="text-xs text-slate-600">Branch: {company.bank_branch}</p>}
+        {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
+          <div className="mt-4 flex items-start gap-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+            {accounts.paymentQrUrl && <img src={accounts.paymentQrUrl} alt="Payment QR code" className="h-16 w-16 shrink-0 object-contain" />}
+            <div>
+              {accounts.hasBankDetails && <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">Bank Details</p>}
+              {accounts.bankName && <p className="mt-1 text-xs text-slate-600">Bank: {accounts.bankName}</p>}
+              {accounts.bankAccountNo && <p className="text-xs text-slate-600">Account No: {accounts.bankAccountNo}</p>}
+              {accounts.bankIfsc && <p className="text-xs text-slate-600">IFSC: {accounts.bankIfsc}</p>}
+              {accounts.bankBranch && <p className="text-xs text-slate-600">Branch: {accounts.bankBranch}</p>}
+            </div>
           </div>
         )}
 
@@ -209,9 +238,10 @@ function ModernInvoice({ invoice }: { invoice: InvoiceDetail }) {
   );
 }
 
-function MinimalInvoice({ invoice }: { invoice: InvoiceDetail }) {
+function MinimalInvoice({ invoice, accountDisplay }: { invoice: InvoiceDetail; accountDisplay: InvoiceAccountDisplay }) {
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   return (
     <div className="px-10 pb-8 pt-12 text-[13px] leading-snug text-slate-900">
       <div className="text-center">
@@ -245,12 +275,15 @@ function MinimalInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
       <p className="mt-4 text-xs text-slate-600">Amount in words: {amountInWords(invoice.grandTotal)}</p>
 
-      {(company.bank_name || company.bank_account_no) && (
-        <div className="mt-6 border-t border-slate-300 pt-3 text-xs text-slate-600">
-          <p><span className="font-medium">Bank:</span> {company.bank_name}</p>
-          <p><span className="font-medium">Account No:</span> {company.bank_account_no}</p>
-          <p><span className="font-medium">IFSC:</span> {company.bank_ifsc}</p>
-          {company.bank_branch && <p><span className="font-medium">Branch:</span> {company.bank_branch}</p>}
+      {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
+        <div className="mt-6 flex items-start gap-3 border-t border-slate-300 pt-3 text-xs text-slate-600">
+          {accounts.paymentQrUrl && <img src={accounts.paymentQrUrl} alt="Payment QR code" className="h-16 w-16 shrink-0 object-contain" />}
+          <div>
+            {accounts.bankName && <p><span className="font-medium">Bank:</span> {accounts.bankName}</p>}
+            {accounts.bankAccountNo && <p><span className="font-medium">Account No:</span> {accounts.bankAccountNo}</p>}
+            {accounts.bankIfsc && <p><span className="font-medium">IFSC:</span> {accounts.bankIfsc}</p>}
+            {accounts.bankBranch && <p><span className="font-medium">Branch:</span> {accounts.bankBranch}</p>}
+          </div>
         </div>
       )}
 
@@ -280,67 +313,73 @@ function MinimalInvoice({ invoice }: { invoice: InvoiceDetail }) {
   );
 }
 
-function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
+function VyaparInvoice({ invoice, accountDisplay }: { invoice: InvoiceDetail; accountDisplay: InvoiceAccountDisplay }) {
   const company = invoice.company || {};
   const customer = invoice.customer || {};
+  const accounts = visibleAccountDetails(company, accountDisplay);
   const gstRate = effectiveGstRate(invoice);
   const qtySum = invoice.lineItems.reduce((sum, item) => sum + (item.qty || 0), 0);
-  const cell = 'border border-slate-500 px-1.5 py-1 align-top';
-  const cellRight = 'border border-slate-500 px-1.5 py-1 text-right align-top';
+  const cell = 'border border-[#888] px-1 py-[2px] align-top';
+  const cellRight = 'border border-[#888] px-1 py-[2px] text-right align-top';
 
   return (
-    <div className="px-8 pb-8 pt-6 text-[13px] leading-snug text-slate-900">
-      <p className="text-center text-[15px] font-bold tracking-wide">Tax Invoice</p>
+    <div className="px-[60px] pb-8 pt-[32px] text-[13.5px] leading-[1.35] text-slate-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+      <p className="text-center text-[15.36px] font-bold">Tax Invoice</p>
 
-      <div className="mt-2 border border-slate-500">
+      <div className="mt-[2px] border border-[#888]">
         <div className="flex">
-          <div className="min-w-0 flex-1 border-r border-slate-500 px-3 py-2">
-            {company.logo_url && <img src={company.logo_url} alt="Company logo" className="mb-1 h-10 w-auto max-w-[150px] rounded object-contain" />}
-            <h1 className="text-base font-bold">{company.name}</h1>
-            <p className="mt-0.5 text-xs leading-relaxed">{companyAddress(company)}</p>
-            <p className="text-xs">Phone no.: {company.phone}</p>
-            {company.email && <p className="text-xs">Email: {company.email}</p>}
-            {company.gstin && <p className="text-xs">GSTIN: {company.gstin}</p>}
-            <p className="text-xs">State: {stateTag(company.stateCode, company.state)}</p>
+          <div className="flex w-1/2 min-w-0 items-center gap-3 border-r border-[#888] px-1 py-1.5">
+            {company.logo_url && <img src={company.logo_url} alt="Company logo" className="h-[60px] w-[60px] shrink-0 object-contain" />}
+            <div className="min-w-0">
+              <h1 className="text-[16px] font-bold leading-tight">{company.name}</h1>
+              <p className="mt-0.5 text-[10px] leading-[1.35]">{companyAddress(company)}</p>
+              {company.phone && <p className="text-[10px]">Phone no.: {company.phone}</p>}
+              {company.email && <p className="text-[10px]">Email: {company.email}</p>}
+              {company.gstin && <p className="text-[10px]">GSTIN: {company.gstin}</p>}
+              <p className="text-[10px]">State: {stateTag(company.stateCode, company.state)}</p>
+            </div>
           </div>
-          <div className="w-[300px] shrink-0 text-xs">
-            <div className="grid grid-cols-2 border-b border-slate-500">
-              <div className="px-3 py-1.5">
+          <div className="w-1/2 shrink-0 text-[10px]">
+            <div className="grid grid-cols-2 border-b border-[#888]">
+              <div className="border-r border-[#888] px-1.5 py-1.5">
                 <p className="text-[10px] text-slate-600">Invoice No.</p>
-                <p className="text-[13px] font-bold">{invoice.invoiceNumber}</p>
+                <p className="text-[15px] font-bold leading-tight">{invoice.invoiceNumber}</p>
               </div>
-              <div className="border-l border-slate-500 px-3 py-1.5">
+              <div className="px-1.5 py-1.5">
                 <p className="text-[10px] text-slate-600">Date</p>
-                <p className="text-[13px] font-bold">{formatDate(invoice.invoiceDate)}</p>
+                <p className="text-[15px] font-bold leading-tight">{formatDate(invoice.invoiceDate)}</p>
               </div>
             </div>
-            <div className="px-3 py-1.5">
-              <p className="text-[10px] text-slate-600">Place of supply</p>
-              <p className="text-[13px] font-bold">{stateTag(invoice.placeOfSupplyStateCode, customer.billing_state)}</p>
+            <div className="grid grid-cols-2 border-b border-[#888]">
+              <div className="border-r border-[#888] px-1.5 py-1.5">
+                <p className="text-[10px] text-slate-600">Place of supply</p>
+                <p className="text-[15px] font-bold leading-tight">{stateTag(invoice.placeOfSupplyStateCode, customer.billing_state)}</p>
+              </div>
+              <div />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-3 border border-slate-500">
-        <p className="border-b border-slate-500 px-3 py-1 text-[10px] font-bold uppercase tracking-wide">Bill To</p>
-        <div className="px-3 py-2">
+      <div className="border border-[#888]">
+        <p className="border-b border-[#888] px-1.5 py-1 text-[10px]">Bill To</p>
+        <div className="px-1.5 py-1.5">
           <p className="font-bold">{customer.name}</p>
-          <p className="text-xs">{billTo(customer)}</p>
-          {customer.gstin && <p className="text-xs">GSTIN : {customer.gstin}</p>}
-          <p className="text-xs">State: {customer.billing_state || stateTag(company.stateCode, company.state)}</p>
+          <p>{billTo(customer)}</p>
+          {customer.gstin && <p>GSTIN : {customer.gstin}</p>}
+          <p>State: {customer.billing_state || stateTag(company.stateCode, company.state)}</p>
         </div>
       </div>
 
-      <table className="mt-3 w-full table-fixed border-collapse text-xs">
+      <table className="w-full table-fixed border-collapse text-[13px]">
         <thead>
           <tr>
-            <th className={`${cell} w-[30px] text-left font-bold`}>#</th>
-            <th className={`${cell} text-left font-bold`}>Item name</th>
-            <th className={`${cell} w-[80px] text-left font-bold`}>HSN/ SAC</th>
-            <th className={`${cell} w-[70px] text-right font-bold`}>Quantity</th>
-            <th className={`${cell} w-[85px] text-right font-bold`}>Price/ Unit</th>
-            <th className={`${cell} w-[95px] text-right font-bold`}>Amount</th>
+            <th className={`${cell} w-[5.5%] text-left font-bold`}>#</th>
+            <th className={`${cell} w-[34%] text-left font-bold`}>Item name</th>
+            <th className={`${cell} w-[14%] text-left font-bold`}>HSN/ SAC</th>
+            <th className={`${cell} w-[15.5%] text-right font-bold`}>Quantity</th>
+            <th className={`${cell} w-[15.5%] text-right font-bold`}>Price/ Unit</th>
+            <th className={`${cell} w-[15.5%] text-right font-bold`}>Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -350,7 +389,7 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
               <td className={cell}>{item.description}</td>
               <td className={cell}>{item.hsnSacCode || '-'}</td>
               <td className={cellRight}>
-                {item.qty} {item.unit}
+                {invoiceQuantity(item.qty, item.unit)}
               </td>
               <td className={cellRight}>{formatCurrency(item.rate)}</td>
               <td className={cellRight}>{formatCurrency(item.lineTotal)}</td>
@@ -368,49 +407,49 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
         </tbody>
       </table>
 
-      <div className="mt-3 flex border border-slate-500">
-        <div className="min-w-0 flex-1 border-r border-slate-500 px-3 py-2">
+      <div className="flex border border-[#888]">
+        <div className="min-w-0 w-1/2 border-r border-[#888] px-1.5 py-1.5">
           <p className="text-[10px] text-slate-600">Invoice Amount in Words</p>
-          <p className="mt-0.5 text-xs font-bold">{amountInWords(invoice.grandTotal)}</p>
+          <p className="mt-0.5 text-[13px] font-bold">{amountInWords(invoice.grandTotal)}</p>
         </div>
-        <div className="w-[230px] shrink-0 text-xs">
-          <p className="px-3 py-1.5 font-bold">Amounts</p>
-          <div className="flex justify-between border-t border-slate-500 px-3 py-1">
+        <div className="w-1/2 shrink-0 text-[13px]">
+          <p className="px-1.5 py-1.5 font-bold">Amounts</p>
+          <div className="flex justify-between border-t border-[#888] px-1.5 py-1">
             <span>Sub Total</span>
             <span>{formatCurrency(invoice.subtotal)}</span>
           </div>
           {invoice.totalDiscount > 0 && (
-            <div className="flex justify-between border-t border-slate-500 px-3 py-1">
+            <div className="flex justify-between border-t border-[#888] px-1.5 py-1">
               <span>Discount</span>
               <span>-{formatCurrency(invoice.totalDiscount)}</span>
             </div>
           )}
           {gstRate != null && invoice.taxableValue > 0 && (
-            <div className="flex justify-between border-t border-slate-500 px-3 py-1">
+            <div className="flex justify-between border-t border-[#888] px-1.5 py-1">
               <span>Tax ({gstRate}%)</span>
               <span>{formatCurrency(invoice.isInterstate ? invoice.totalIgst : invoice.totalCgst + invoice.totalSgst)}</span>
             </div>
           )}
           {invoice.roundOff !== 0 && (
-            <div className="flex justify-between border-t border-slate-500 px-3 py-1">
+            <div className="flex justify-between border-t border-[#888] px-1.5 py-1">
               <span>Round off</span>
               <span>{formatCurrency(invoice.roundOff)}</span>
             </div>
           )}
-          <div className="flex justify-between border-t border-slate-500 px-3 py-1.5 font-bold">
+          <div className="flex justify-between border-t border-[#888] px-1.5 py-1.5 font-bold">
             <span>Total</span>
             <span>{formatCurrency(invoice.grandTotal)}</span>
           </div>
         </div>
       </div>
 
-      <table className="mt-3 w-full table-fixed border-collapse text-xs">
+      <table className="w-full table-fixed border-collapse text-[13px]">
         <thead>
           <tr className="font-bold">
-            <th rowSpan={2} className={`${cell} w-[14%] text-left`}>
+            <th rowSpan={2} className={`${cell} w-[16%] text-left`}>
               HSN/ SAC
             </th>
-            <th rowSpan={2} className={`${cell} text-right`}>
+            <th rowSpan={2} className={`${cell} w-[18%] text-right`}>
               Taxable amount
             </th>
             {!invoice.isInterstate ? (
@@ -427,17 +466,17 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
                 IGST
               </th>
             )}
-            <th rowSpan={2} className={`${cell} text-right`}>
+            <th rowSpan={2} className={`${cell} w-[22%] text-right`}>
               Total Tax Amount
             </th>
           </tr>
           <tr className="font-bold">
-            <th className={cell}>Rate</th>
-            <th className={cellRight}>Amount</th>
+            <th className={`${cell} ${invoice.isInterstate ? 'w-[22%]' : 'w-[8%]'}`}>Rate</th>
+            <th className={`${cellRight} ${invoice.isInterstate ? 'w-[22%]' : 'w-[14%]'}`}>Amount</th>
             {!invoice.isInterstate && (
               <>
-                <th className={cell}>Rate</th>
-                <th className={cellRight}>Amount</th>
+                <th className={`${cell} w-[8%]`}>Rate</th>
+                <th className={`${cellRight} w-[14%]`}>Amount</th>
               </>
             )}
           </tr>
@@ -445,58 +484,61 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
         <tbody>
           {invoice.lineItems.map((item, idx) => (
             <tr key={item.id || idx}>
-              <td className={cell}>{item.hsnSacCode || '-'}</td>
-              <td className={cellRight}>{formatCurrency(item.taxableValue)}</td>
+              <td className={`${cell} w-[16%]`}>{item.hsnSacCode || '-'}</td>
+              <td className={`${cellRight} w-[18%]`}>{formatCurrency(item.taxableValue)}</td>
               {!invoice.isInterstate ? (
                 <>
-                  <td className={cell}>{item.gstRate}%</td>
-                  <td className={cellRight}>{formatCurrency(item.cgstAmount || 0)}</td>
-                  <td className={cell}>{item.gstRate}%</td>
-                  <td className={cellRight}>{formatCurrency(item.sgstAmount || 0)}</td>
+                  <td className={`${cell} w-[8%]`}>{item.gstRate}%</td>
+                  <td className={`${cellRight} w-[14%]`}>{formatCurrency(item.cgstAmount || 0)}</td>
+                  <td className={`${cell} w-[8%]`}>{item.gstRate}%</td>
+                  <td className={`${cellRight} w-[14%]`}>{formatCurrency(item.sgstAmount || 0)}</td>
                 </>
               ) : (
                 <>
-                  <td className={cell}>{item.gstRate}%</td>
-                  <td className={cellRight}>{formatCurrency(item.igstAmount || 0)}</td>
+                  <td className={`${cell} w-[22%]`}>{item.gstRate}%</td>
+                  <td className={`${cellRight} w-[22%]`}>{formatCurrency(item.igstAmount || 0)}</td>
                 </>
               )}
-              <td className={cellRight}>{formatCurrency(lineTax(item))}</td>
+              <td className={`${cellRight} w-[22%]`}>{formatCurrency(lineTax(item))}</td>
             </tr>
           ))}
           <tr className="font-bold">
-            <td className={cell}>Total</td>
-            <td className={cellRight}>{formatCurrency(invoice.taxableValue)}</td>
+            <td className={`${cell} w-[16%]`}>Total</td>
+            <td className={`${cellRight} w-[18%]`}>{formatCurrency(invoice.taxableValue)}</td>
             {!invoice.isInterstate ? (
               <>
-                <td className={cell} />
-                <td className={cellRight}>{formatCurrency(invoice.totalCgst)}</td>
-                <td className={cell} />
-                <td className={cellRight}>{formatCurrency(invoice.totalSgst)}</td>
+                <td className={`${cell} w-[8%]`} />
+                <td className={`${cellRight} w-[14%]`}>{formatCurrency(invoice.totalCgst)}</td>
+                <td className={`${cell} w-[8%]`} />
+                <td className={`${cellRight} w-[14%]`}>{formatCurrency(invoice.totalSgst)}</td>
               </>
             ) : (
               <>
-                <td className={cell} />
-                <td className={cellRight}>{formatCurrency(invoice.totalIgst)}</td>
+                <td className={`${cell} w-[22%]`} />
+                <td className={`${cellRight} w-[22%]`}>{formatCurrency(invoice.totalIgst)}</td>
               </>
             )}
-            <td className={cellRight}>
+            <td className={`${cellRight} w-[22%]`}>
               {formatCurrency(invoice.isInterstate ? invoice.totalIgst : invoice.totalCgst + invoice.totalSgst)}
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div className="mt-3 grid grid-cols-3 border border-slate-500">
-        {(company.bank_name || company.bank_account_no) && (
-          <div className="border-r border-slate-500 px-3 py-2 text-xs">
-            <p className="font-bold">Bank Details</p>
-            {company.bank_name && <p className="mt-0.5">Name : {company.bank_name}</p>}
-            {company.bank_account_no && <p>Account No. : {company.bank_account_no}</p>}
-            {company.bank_ifsc && <p>IFSC code : {company.bank_ifsc}</p>}
-            {company.bank_branch && <p>Branch : {company.bank_branch}</p>}
+      <div className="grid grid-cols-3 border border-[#888]">
+        {(accounts.hasBankDetails || accounts.paymentQrUrl) && (
+          <div className="flex items-start gap-2 border-r border-[#888] px-1.5 py-1.5 text-[10px]">
+            {accounts.paymentQrUrl && <img src={accounts.paymentQrUrl} alt="Payment QR code" className="h-[60px] w-[60px] shrink-0 object-contain" />}
+            <div className="min-w-0">
+              {accounts.hasBankDetails && <p className="font-bold">Bank Details</p>}
+              {accounts.bankName && <p className="mt-0.5">Name : {accounts.bankName}</p>}
+              {accounts.bankAccountNo && <p>Account No. : {accounts.bankAccountNo}</p>}
+              {accounts.bankIfsc && <p>IFSC code : {accounts.bankIfsc}</p>}
+              {accounts.bankBranch && <p>Branch : {accounts.bankBranch}</p>}
+            </div>
           </div>
         )}
-        <div className="border-r border-slate-500 px-3 py-2 text-xs">
+        <div className="border-r border-[#888] px-1.5 py-1.5 text-[10px]">
           {invoice.notes && (
             <div>
               <p className="font-bold">Notes</p>
@@ -510,9 +552,9 @@ function VyaparInvoice({ invoice }: { invoice: InvoiceDetail }) {
             </div>
           )}
         </div>
-        <div className="px-3 py-2 text-right text-xs">
+        <div className="px-1.5 py-1.5 text-center text-[10px]">
           <p>For : {company.name}</p>
-          {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="ml-auto mt-2 h-9 w-auto max-w-[130px] object-contain" />}
+          {company.signature_url && <img src={company.signature_url} alt="Authorized signatory signature" className="mx-auto mt-2 h-9 w-auto max-w-[130px] object-contain" />}
           <p className={`font-bold ${company.signature_url ? 'mt-1' : 'mt-10'}`}>Authorized Signatory</p>
         </div>
       </div>
@@ -550,7 +592,7 @@ function LineItemsTable({ invoice, tableClass }: { invoice: InvoiceDetail; table
             <td className="px-2 py-2 font-medium text-slate-800">{item.description}</td>
             <td className="px-2 py-2 text-slate-500">{item.hsnSacCode || '-'}</td>
             <td className="px-2 py-2 text-right text-slate-600">
-              {item.qty} {item.unit}
+                {invoiceQuantity(item.qty, item.unit)}
             </td>
             <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(item.rate)}</td>
             <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(item.taxableValue)}</td>

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS companies (
   financial_year_start_month INTEGER NOT NULL DEFAULT 4,
   logo_url TEXT,
   signature_url TEXT,
+  payment_qr_url TEXT,
   terms_and_conditions TEXT,
   created_by TEXT REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -67,6 +68,11 @@ CREATE TABLE IF NOT EXISTS company_preferences (
   company_id TEXT PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
   print_design TEXT NOT NULL DEFAULT 'classic' CHECK (print_design IN ('classic', 'modern', 'minimal', 'vyapar')),
   download_design TEXT NOT NULL DEFAULT 'classic' CHECK (download_design IN ('classic', 'modern', 'minimal', 'vyapar')),
+  show_bank_name INTEGER NOT NULL DEFAULT 1,
+  show_bank_branch INTEGER NOT NULL DEFAULT 1,
+  show_bank_account_no INTEGER NOT NULL DEFAULT 1,
+  show_bank_ifsc INTEGER NOT NULL DEFAULT 1,
+  show_payment_qr INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -326,3 +332,36 @@ CREATE TABLE IF NOT EXISTS quotation_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_quotation_items_quotation ON quotation_items(quotation_id);
+
+-- Standing monthly bill for a customer: the recurring set of items, quantities
+-- and prices used to raise that customer's invoice every month. One bill per
+-- customer. Amounts are recomputed (CGST/SGST/IGST, round off) at invoice time
+-- because the tax treatment depends on each customer's place of supply.
+CREATE TABLE IF NOT EXISTS customer_monthly_bills (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(company_id, customer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_bills_company ON customer_monthly_bills(company_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_bills_customer ON customer_monthly_bills(customer_id);
+
+CREATE TABLE IF NOT EXISTS customer_monthly_bill_items (
+  id TEXT PRIMARY KEY,
+  monthly_bill_id TEXT NOT NULL REFERENCES customer_monthly_bills(id) ON DELETE CASCADE,
+  item_id TEXT REFERENCES items(id),
+  description TEXT NOT NULL,
+  hsn_sac_code TEXT,
+  qty REAL NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'NOS',
+  rate REAL NOT NULL DEFAULT 0,
+  discount_percent REAL NOT NULL DEFAULT 0,
+  gst_rate REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_bill_items_bill ON customer_monthly_bill_items(monthly_bill_id);

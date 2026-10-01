@@ -21,6 +21,7 @@ interface SearchableSelectProps {
   options: SearchableOption[];
   className?: string;
   freeText?: boolean;
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -35,6 +36,7 @@ export function SearchableSelect({
   options,
   className,
   freeText = false,
+  disabled = false,
 }: SearchableSelectProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -81,6 +83,13 @@ export function SearchableSelect({
     setOpen(false);
   }
 
+  function handleFocus() {
+    if (disabled) return;
+    setQuery(freeText ? (selected ? selected.label : value) : '');
+    setOpen(true);
+    setHighlighted(0);
+  }
+
   return (
     <div className={clsx('block', className)}>
       {label && (
@@ -92,7 +101,10 @@ export function SearchableSelect({
       <div className="relative">
         <div
           className={clsx(
-            'flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 transition duration-150 hover:border-slate-300 focus-within:border-indigo-500 focus-within:outline-none focus-within:ring-4 focus-within:ring-indigo-500/15',
+            'flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 transition duration-150',
+            disabled
+              ? 'cursor-not-allowed bg-slate-50'
+              : 'hover:border-slate-300 focus-within:border-indigo-500 focus-within:outline-none focus-within:ring-4 focus-within:ring-indigo-500/15',
             error && 'border-red-400'
           )}
         >
@@ -103,17 +115,14 @@ export function SearchableSelect({
             aria-autocomplete="list"
             aria-controls={open ? 'searchable-select-list' : undefined}
             aria-activedescendant={open ? `searchable-select-option-${highlighted}` : undefined}
+            disabled={disabled}
             autoComplete="off"
             inputMode="text"
             enterKeyHint="done"
-            className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed disabled:text-slate-400"
             placeholder={!freeText && selected && !open ? selected.label : placeholder}
             value={inputValue}
-            onFocus={() => {
-              setQuery(freeText ? (selected ? selected.label : value) : '');
-              setOpen(true);
-              setHighlighted(0);
-            }}
+            onFocus={handleFocus}
             onBlur={() => setOpen(false)}
             onChange={(e) => {
               const text = e.target.value;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import clsx from 'clsx';
 import type { DocumentDesign, InvoiceDetail } from '../../types';
@@ -7,6 +8,7 @@ import { Button } from '../ui/Button';
 import { DesignThumbnail } from '../ui/DesignThumbnail';
 import { InvoicePrintView } from './InvoicePrintView';
 import { InvoicePdf } from '../../pdf/InvoicePdf';
+import { getPreferences } from '../../api/preferences';
 import { DOCUMENT_DESIGNS, designLabel } from '../../utils/designs';
 import { formatCurrency, formatDate } from '../../utils/format';
 
@@ -47,6 +49,12 @@ export function DocumentPreviewModal({
   const [zoom, setZoom] = useState<string | number>('fit');
   const stageRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const companyId = invoice.company?.id;
+  const { data: preferences, isLoading: preferencesLoading } = useQuery({
+    queryKey: ['preferences', companyId],
+    queryFn: () => getPreferences(companyId!),
+    enabled: open && !!companyId,
+  });
 
   const scale = zoom === 'fit' ? fitScale : (zoom as number);
 
@@ -132,9 +140,13 @@ export function DocumentPreviewModal({
                 </select>
               </label>
               <PDFDownloadLink
-                document={<InvoicePdf invoice={invoice} design={design} />}
+                document={<InvoicePdf invoice={invoice} design={design} accountDisplay={preferences} />}
                 fileName={`${fileBase}.pdf`}
-                className={PDF_BUTTON_CLASSES}
+                className={clsx(PDF_BUTTON_CLASSES, preferencesLoading && 'pointer-events-none opacity-60')}
+                aria-disabled={preferencesLoading}
+                onClick={(event) => {
+                  if (preferencesLoading) event.preventDefault();
+                }}
               >
                 {({ loading }) =>
                   loading ? (
@@ -188,7 +200,7 @@ export function DocumentPreviewModal({
                 style={{ width: PDF_PAGE_WIDTH, transform: `scale(${scale})`, transformOrigin: 'top left' }}
                 className="absolute left-0 top-0 overflow-hidden rounded-md bg-white shadow-xl shadow-slate-400/20"
               >
-                <InvoicePrintView invoice={invoice} design={design} />
+                <InvoicePrintView invoice={invoice} design={design} accountDisplay={preferences} />
               </div>
             </div>
           </div>

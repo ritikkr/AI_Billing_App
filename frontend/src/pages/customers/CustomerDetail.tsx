@@ -6,15 +6,19 @@ import { getCustomer } from '../../api/customers';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge, Badge } from '../../components/ui/Badge';
-import { PageLoader } from '../../components/ui/Spinner';
+import { PageLoader, Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { aggregateTotals, computeLineTax } from '../../utils/gst';
+import { getCustomerMonthlyBill } from '../../api/monthlyBills';
 import { CustomerFormModal } from './CustomerFormModal';
+import { MonthlyBillFormModal } from '../monthlybills/MonthlyBillFormModal';
 
 export default function CustomerDetail() {
   const { id } = useParams();
   const { companyId, canEdit } = useCompany();
   const [editOpen, setEditOpen] = useState(false);
+  const [billOpen, setBillOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['customer', companyId, id],
@@ -22,8 +26,23 @@ export default function CustomerDetail() {
     enabled: !!companyId && !!id,
   });
 
+  const { data: monthlyBill, isLoading: monthlyBillLoading } = useQuery({
+    queryKey: ['customerMonthlyBill', companyId, id],
+    queryFn: () => getCustomerMonthlyBill(companyId!, id!),
+    enabled: !!companyId && !!id,
+  });
+
   if (isLoading) return <PageLoader />;
   if (!data) return <Navigate to="/customers" replace />;
+
+  const billLines = monthlyBill?.items ?? [];
+  const billTaxable = billLines.map((i) => ({
+    qty: i.qty,
+    rate: i.rate,
+    discountPercent: i.discountPercent,
+    gstRate: i.gstRate,
+  }));
+  const monthlyTotal = aggregateTotals(billTaxable, billTaxable.map((l) => computeLineTax(l, !!monthlyBill?.isInterstate))).grandTotal;
 
   return (
     <div className="space-y-6">
@@ -76,7 +95,7 @@ export default function CustomerDetail() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <Card className="lg:col-span-1">
           <CardHeader title="Contact & address" />
           <CardBody className="space-y-3 text-sm">
@@ -87,6 +106,10 @@ export default function CustomerDetail() {
             <div>
               <p className="text-xs text-slate-400">Phone</p>
               <p className="text-slate-700">{data.phone || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Group</p>
+              <p className="text-slate-700">{data.group || 'Unassigned'}</p>
             </div>
             <div>
               <p className="text-xs text-slate-400">PAN</p>
@@ -113,6 +136,53 @@ export default function CustomerDetail() {
                 <p className="text-xs text-slate-400">Notes</p>
                 <p className="text-slate-700">{data.notes}</p>
               </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card className="lg:col-span-1">
+          <CardHeader
+            title="Monthly bill"
+            action={
+              canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setBillOpen(true)}>
+                  {monthlyBill?.bill ? 'Edit' : 'Set up'}
+                </Button>
+              )
+            }
+          />
+          <CardBody className="space-y-3 text-sm">
+            {monthlyBillLoading ? (
+              <div className="flex justify-center py-6">
+                <Spinner />
+              </div>
+            ) : !monthlyBill?.bill || monthlyBill.items.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No monthly bill set up. Define the items and prices you bill {data.name} every month.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-slate-400">Billed every month</span>
+                  <span className="text-lg font-semibold text-slate-900">{formatCurrency(monthlyTotal)}</span>
+                </div>
+                <ul className="divide-y divide-slate-100 border-y border-slate-100">
+                  {monthlyBill.items.map((item, idx) => (
+                    <li key={item.id || idx} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-slate-700">{item.description}</p>
+                        <p className="text-xs text-slate-400">
+                          {item.qty} {item.unit} × {formatCurrency(item.rate)} · {item.gstRate}% GST
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-medium tabular-nums text-slate-900">
+                        {formatCurrency((item.qty || 0) * (item.rate || 0))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {monthlyBill.bill.notes && <p className="text-xs text-slate-500">{monthlyBill.bill.notes}</p>}
+              </>
             )}
           </CardBody>
         </Card>
@@ -157,6 +227,7 @@ export default function CustomerDetail() {
       </div>
 
       <CustomerFormModal open={editOpen} onClose={() => setEditOpen(false)} customer={data} />
+      <MonthlyBillFormModal open={billOpen} onClose={() => setBillOpen(false)} customer={data} />
     </div>
   );
 }

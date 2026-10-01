@@ -20,7 +20,7 @@ import { DOCUMENT_DESIGNS, designLabel } from '../../utils/designs';
 import type { DocumentDesign } from '../../types';
 
 const isDesign = (v: string | null): v is DocumentDesign =>
-  v === 'classic' || v === 'modern' || v === 'minimal';
+  v === 'classic' || v === 'modern' || v === 'minimal' || v === 'vyapar';
 
 export default function ServeDocument() {
   const { doc, id } = useParams();
@@ -45,7 +45,7 @@ export default function ServeDocument() {
     enabled: !!companyId && !!id && doc === 'certificate',
   });
 
-  const { data: preferences } = useQuery({
+  const { data: preferences, isLoading: preferencesLoading } = useQuery({
     queryKey: ['preferences', companyId],
     queryFn: () => getPreferences(companyId!),
     enabled: !!companyId,
@@ -57,11 +57,12 @@ export default function ServeDocument() {
     : (preferences?.printDesign ?? 'classic');
 
   useEffect(() => {
+    if (preferencesLoading) return;
     if (searchParams.get('auto') === '1') {
       const timer = window.setTimeout(() => window.print(), 300);
       return () => window.clearTimeout(timer);
     }
-  }, [searchParams]);
+  }, [searchParams, preferencesLoading]);
 
   if (doc !== 'invoice' && doc !== 'quotation' && doc !== 'certificate') {
     return (
@@ -109,7 +110,7 @@ export default function ServeDocument() {
             ))}
           </div>
           <PDFDownloadLink
-            document={<InvoicePdf invoice={invoice} design={design} />}
+            document={<InvoicePdf invoice={invoice} design={design} accountDisplay={preferences} />}
             fileName={`${fileBase}.pdf`}
             className="no-underline inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs transition duration-150 ease-out hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
           >
@@ -251,7 +252,7 @@ export default function ServeDocument() {
 
       <div className="flex justify-center p-4 print:p-0">
         <div className="w-full max-w-[210mm] overflow-hidden rounded-lg bg-white shadow-xl print:max-w-none print:rounded-none print:shadow-none">
-          {doc === 'invoice' && invoice && <InvoicePrintView invoice={invoice} design={design} />}
+          {doc === 'invoice' && invoice && <InvoicePrintView invoice={invoice} design={design} accountDisplay={preferences} />}
           {doc === 'quotation' && quotation && <QuotationPrintView quotation={quotation} design={design} />}
           {doc === 'certificate' && certificate && <CertificatePrintView certificate={certificate} />}
         </div>

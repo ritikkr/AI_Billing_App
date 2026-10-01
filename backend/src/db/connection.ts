@@ -122,6 +122,9 @@ export async function runMigrations(): Promise<void> {
   if (!companyExisting.has('signature_url')) {
     await db.prepare(`ALTER TABLE companies ADD COLUMN signature_url TEXT`).run();
   }
+  if (!companyExisting.has('payment_qr_url')) {
+    await db.prepare(`ALTER TABLE companies ADD COLUMN payment_qr_url TEXT`).run();
+  }
 
   // Rebuild company_preferences when it predates the 'vyapar' design option.
   const pref = (await db
@@ -134,6 +137,11 @@ export async function runMigrations(): Promise<void> {
         company_id TEXT PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
         print_design TEXT NOT NULL DEFAULT 'classic' CHECK (print_design IN ('classic', 'modern', 'minimal', 'vyapar')),
         download_design TEXT NOT NULL DEFAULT 'classic' CHECK (download_design IN ('classic', 'modern', 'minimal', 'vyapar')),
+        show_bank_name INTEGER NOT NULL DEFAULT 1,
+        show_bank_branch INTEGER NOT NULL DEFAULT 1,
+        show_bank_account_no INTEGER NOT NULL DEFAULT 1,
+        show_bank_ifsc INTEGER NOT NULL DEFAULT 1,
+        show_payment_qr INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )`).run();
       await tx
@@ -144,6 +152,20 @@ export async function runMigrations(): Promise<void> {
         .run();
       await tx.prepare(`DROP TABLE company_preferences_old`).run();
     });
+  }
+
+  const preferenceCols = (await db.prepare(`PRAGMA table_info(company_preferences)`).all()) as Array<{ name: string }>;
+  const preferenceExisting = new Set(preferenceCols.map((c) => c.name));
+  for (const [column, definition] of [
+    ['show_bank_name', 'INTEGER NOT NULL DEFAULT 1'],
+    ['show_bank_branch', 'INTEGER NOT NULL DEFAULT 1'],
+    ['show_bank_account_no', 'INTEGER NOT NULL DEFAULT 1'],
+    ['show_bank_ifsc', 'INTEGER NOT NULL DEFAULT 1'],
+    ['show_payment_qr', 'INTEGER NOT NULL DEFAULT 1'],
+  ]) {
+    if (!preferenceExisting.has(column)) {
+      await db.prepare(`ALTER TABLE company_preferences ADD COLUMN ${column} ${definition}`).run();
+    }
   }
 
   // Add quotation_prefix and certificate_prefix columns to companies for existing databases.

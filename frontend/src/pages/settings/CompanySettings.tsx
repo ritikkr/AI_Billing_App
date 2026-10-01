@@ -14,11 +14,13 @@ import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/Spinner';
+import { AccountsTab } from './AccountsTab';
 import { PrintDownloadTab } from './PrintDownloadTab';
 import type { Role } from '../../types';
 
 const TABS = [
   { key: 'profile', label: 'Company Profile' },
+  { key: 'accounts', label: 'Accounts' },
   { key: 'users', label: 'Users & Roles' },
   { key: 'preferences', label: 'Print & Download' },
 ] as const;
@@ -27,7 +29,7 @@ export default function CompanySettings() {
   const { tab: tabParam } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useCompany();
-  const tab = tabParam === 'users' ? 'users' : tabParam === 'preferences' ? 'preferences' : 'profile';
+  const tab = tabParam === 'users' ? 'users' : tabParam === 'preferences' ? 'preferences' : tabParam === 'accounts' ? 'accounts' : 'profile';
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -48,7 +50,7 @@ export default function CompanySettings() {
         ))}
       </div>
 
-      {tab === 'profile' ? <ProfileTab readOnly={!isAdmin} /> : tab === 'preferences' ? <PrintDownloadTab /> : <UsersTab />}
+      {tab === 'profile' ? <ProfileTab readOnly={!isAdmin} /> : tab === 'accounts' ? <AccountsTab /> : tab === 'preferences' ? <PrintDownloadTab /> : <UsersTab />}
     </div>
   );
 }
