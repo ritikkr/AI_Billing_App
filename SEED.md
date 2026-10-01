@@ -19,6 +19,9 @@ The backend ships with an idempotent seed script that creates a **self-contained
 From `backend/`:
 
 ```bash
+# Inspect first (read-only, safe on production)
+npm run seed -- --check
+
 # Create the demo tenant (refuses if one already exists)
 npm run seed
 
@@ -31,6 +34,21 @@ Or with non-interactive confirmation on CI/one-liners:
 ```bash
 SEED_CONFIRM=yes npm run seed -- --reset
 ```
+
+### Verifying it worked
+
+After seeding, the login should work:
+
+```bash
+curl -s -X POST https://<your-api-host>/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","password":"Demo@12345"}'
+```
+
+A successful response contains a `token`. A `401 {"error":"Invalid email or password"}` means
+the demo tenant does not exist in the database the API is actually using — usually because the
+seed was run against a different database than the one the API points at. Run `npm run seed -- --check`
+to confirm which database the seed sees.
 
 ---
 
@@ -98,30 +116,91 @@ The seed script lives at [`backend/src/db/seed.ts`](backend/src/db/seed.ts) and 
 
 ## Running on production
 
-### Prerequisites
+You run the seed **from your own machine**, not from the Render shell. The script connects
+directly to the Turso database using the same credentials the app uses, so it only needs the two
+Turso env vars — no redeploy and no shell access to the server required.
 
-- Database is migrated (migrations run automatically on app boot; the seed also calls `runMigrations()`).
-- `JWT_SECRET` is set (required by the app; seed itself doesn't mint tokens, it only writes data).
-- You have a safe way to run one-off scripts against your production database (Turso/libSQL via `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`, or a local SQLite file if self-hosted).
+### Step 1 — get the credentials
 
-### Recommended (safe)
+In Render: your service → **Environment**. Copy the values of:
 
-1. **Back up first.** Take a snapshot of your production database before running the seed.
-2. **Preview against a staging copy.** Clone your production DB to staging and run `npm run seed -- --reset --yes` there to verify.
-3. **Run on prod.** From the backend directory with production env vars loaded:
+- `TURSO_DATABASE_URL` — e.g. `libsql://your-db-yourname.turso.io`
+- `TURSO_AUTH_TOKEN` — the long JWT string
 
-   ```bash
-   cd backend
-   SEED_CONFIRM=yes npm run seed -- --reset
-   ```
+> If either is still the literal placeholder from `render.yaml` (`your-database-name-org…` or
+> `PASTE_YOUR_TURSO_TOKEN_HERE`), the app is **not** using Turso at all — it silently falls back to
+> `/tmp/data/billing.db` on Render's ephemeral disk, which is wiped on every redeploy. Fix that
+> first; the seed now refuses to run against a placeholder URL.
 
-   Or explicitly pass `--yes`:
+You can also mint a fresh read/write token with the Turso CLI:
 
-   ```bash
-   npm run seed -- --reset --yes
-   ```
+```bash
+turso db tokens create <db-name> --type jwt
+```
 
-The seed will refuse to run if it detects an existing demo tenant without `--reset`. It will also refuse to delete without confirmation unless `SEED_CONFIRM=yes` or `--yes` is provided.
+### Step 2 — point the seed at production
+
+Put the credentials in `backend/.env` (already gitignored). The seed loads `.env` the same way the
+app does, so this is sufficient — no need to export anything into your shell:
+
+```dotenv
+TURSO_DATABASE_URL=libsql://your-db-yourname.turso.io
+TURSO_AUTH_TOKEN=eyJhbGciOi...
+```
+
+### Step 3 — confirm the target (read-only)
+
+```bash
+cd backend
+npm run seed -- --check
+```
+
+You must see the Turso line. Anything else means you are pointed at a local file:
+
+```
+Target: Turso (production) — libsql://your-db-yourname.turso.io
+```
+
+```
+Target: local database backend/data/billing.db
+  WARNING: TURSO_DATABASE_URL is not set, so this is NOT the production database.
+```
+
+### Step 4 — seed
+
+```bash
+SEED_CONFIRM=yes npm run seed -- --reset
+```
+
+Add `--yes` instead of `SEED_CONFIRM=yes` if you prefer. The command prints what it deleted and what
+it created, ending with the demo login details.
+
+### Step 5 — verify
+
+```bash
+curl -s -X POST https://billgst-api.onrender.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","password":"Demo@12345"}'
+```
+
+A `token` in the response means the demo account is live on prod.
+
+### Notes
+
+- Running the seed with `--reset` deletes **only** the company whose name starts with `Demo `. Your
+  real companies, customers and invoices are untouched. This was verified against a database
+  containing real production data.
+- Only one demo tenant can exist. Re-running without `--reset` exits with code `1`.
+- Seeded invoice dates are relative to the day you seed. Re-run with `--reset` to refresh them.
+
+### Production troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| `401 Invalid email or password` after seeding | Seed ran against a different database than the API. Re-check with `--check`. |
+| `Refusing to run: TURSO_DATABASE_URL is still a placeholder` | Credentials in `.env` are the `render.yaml` placeholders. |
+| `SERVER_ERROR: Server returned HTTP status 404` | Turso URL is wrong, or the token lacks write permission. |
+| Login works but the dashboard is empty | The app is pointed at a different DB. Confirm the company switcher shows `Demo Meridian Retail Pvt Ltd`. |
 
 ---
 

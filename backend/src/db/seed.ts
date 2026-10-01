@@ -10,10 +10,14 @@
  *   npm run seed                    -- create the demo tenant (refuses if one exists)
  *   npm run seed -- --reset         -- delete any existing demo tenant, then recreate
  *   SEED_CONFIRM=yes npm run seed -- --reset    -- skip the deletion confirmation
+ *   npm run seed -- --check         -- read-only: report whether a demo tenant exists
  *
  * Demo logins use the reserved example.com domain, which can never receive
  * mail, so the account can never be taken over via password reset or OTP.
  */
+// Must come first so TURSO_DATABASE_URL / TURSO_AUTH_TOKEN in backend/.env are
+// honoured, exactly as they are for the running app (see src/index.ts).
+import 'dotenv/config';
 import { db, runMigrations } from './connection.js';
 import { newId } from '../utils/id.js';
 import { hashPassword } from '../utils/password.js';
@@ -39,6 +43,7 @@ const COMPANY_PREFIX = 'Demo ';
 const args = process.argv.slice(2);
 const shouldReset = args.includes('--reset');
 const skipConfirm = args.includes('--yes');
+const checkOnly = args.includes('--check');
 
 function log(msg: string) {
   console.log(msg);
@@ -227,10 +232,63 @@ async function deleteDemoTenant(): Promise<void> {
 /*  Seed                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Guards against seeding the wrong database. render.yaml ships Turso values as
+ * visible placeholders, and the app silently falls back to an ephemeral local
+ * file when they are unset, so both cases must be caught up front.
+ */
+function assertRealTarget() {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url && /your-database-name-org|PASTE_|changeme|todo/i.test(url)) {
+    console.error(
+      `\nRefusing to run: TURSO_DATABASE_URL is still a placeholder.\n  ${url}\n` +
+        'Set the real Turso URL in backend/.env (Render dashboard → your service → Environment).\n'
+    );
+    process.exit(1);
+  }
+}
+
+function describeTarget(): string {
+  const url = process.env.TURSO_DATABASE_URL;
+  return url
+    ? `Turso (production) — ${url.replace(/\/\/.*@/, '//***@')}`
+    : `local database ${process.env.DB_PATH || '(default)'}\n` +
+        '  WARNING: TURSO_DATABASE_URL is not set, so this is NOT the production database.';
+}
+
+/** Read-only inspection: safe to run against production at any time. */
+async function check() {
+  log(`\nTarget: ${describeTarget()}\n`);
+
+  const demo = await findDemoCompany();
+  if (!demo) {
+    log('No demo tenant found. Run:  npm run seed\n');
+    return;
+  }
+
+  const count = async (table: string, where = '', ...p: any[]) =>
+    ((await db.prepare(`SELECT COUNT(*) as n FROM ${table} ${where}`).all(...p))[0] as any).n as number;
+
+  const adminUser = (await db.prepare(`SELECT id FROM users WHERE email = ?`).get(ADMIN_EMAIL)) as any;
+  log(`Demo tenant    ${demo.name}`);
+  log(`  company id  ${demo.id}`);
+  log(`  logins      ${ADMIN_EMAIL} (${adminUser ? 'present' : 'MISSING'}), ${ACCOUNTANT_EMAIL}`);
+  log(`  customers   ${await count('customers', 'WHERE company_id = ?', demo.id)}`);
+  log(`  items       ${await count('items', 'WHERE company_id = ?', demo.id)}`);
+  log(`  invoices    ${await count('invoices', 'WHERE company_id = ?', demo.id)}`);
+  log(`  monthly bills ${await count('customer_monthly_bills', 'WHERE company_id = ?', demo.id)}`);
+  log(`\nOther companies in this database: ${(await count('companies', "WHERE name NOT LIKE 'Demo %'"))}`);
+  log('\nRead-only check complete; nothing was modified.\n');
+}
+
 async function main() {
-  // Idempotent, so this is a no-op on an already-migrated database.
+  // Refuse to write anywhere if the Turso URL is still a blueprint placeholder.
+  assertRealTarget();
+
+  // Idempotent: a no-op on an already-migrated database. Runs before the
+  // read-only check too, so `--check` works on a fresh or partially migrated DB.
   await runMigrations();
-  // Cascades are what clean up a previous run, so they must be on for this connection.
+  if (checkOnly) return check();
   await db.prepare(`PRAGMA foreign_keys = ON`).run();
 
   const existing = await findDemoCompany();
