@@ -26,7 +26,7 @@ export function validateGSTIN(gstin: string): { valid: boolean; reason?: string 
   return { valid: true };
 }
 
-function computeGSTINCheckDigit(first14: string): string {
+export function computeGSTINCheckDigit(first14: string): string {
   let sum = 0;
   for (let i = 0; i < first14.length; i++) {
     const value = GSTIN_CHARSET.indexOf(first14[i]);
